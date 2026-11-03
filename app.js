@@ -223,7 +223,14 @@ async function flash() {
 
 async function useHelperIfRunning() {
   const helper = await HelperClient.detect();
-  if (!helper) return;
+  if (!helper) {
+    $('helperBadge').hidden = false;
+    $('helperBadge').className = 'badge off';
+    $('helperBadge').innerHTML = 'Manual mode: no helper found on this computer. <button id="retryHelper" type="button" class="link">Check again</button>';
+    $('retryHelper').onclick = () => { $('helperBadge').textContent = 'Looking for helper…'; useHelperIfRunning(); };
+    return;
+  }
+  $('helperBadge').className = 'badge';
   state.helper = helper;
   document.body.classList.add('helper');
   document.querySelectorAll('.helperOnly').forEach(el => (el.hidden = false));
