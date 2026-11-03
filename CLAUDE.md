@@ -22,6 +22,7 @@ the user's machine; logic lives in this repo and deploys from GitHub.
 - Deploy: push to `main` (Pages workflow; also daily cron). Helper binaries: push tag `helper-v*`.
 
 ## Camera facts (learned the hard way)
+- BusyBox `tar` on cameras may have no `-z`: unpack with `gzip -dc FILE | tar -xf -`.
 - Cameras have no SFTP server: uploads must use legacy SCP (`scp -O` on the PC, `scp -t` remote).
 - Read variables with `fw_printenv NAME | sed 's/^[^=]*=//'`, which works with or without `-n`.
   The failure that prompted this came from a bug in the test VM's mock; a real camera supports `-n`.

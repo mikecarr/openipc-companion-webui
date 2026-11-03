@@ -343,3 +343,9 @@ test('log: colour codes are removed, even when split across chunks', () => {
 test('log: a pending carriage return does not hide the line before more output', () => {
   assert.equal(shown('Writing kb: 1/2 (50%)\r'), 'Writing kb: 1/2 (50%)');
 });
+
+test('flash command unpacks without tar -z, which BusyBox tar on cameras may lack', () => {
+  const c = flashCommand({ soc: 'ssc338q', filename: 'f.tgz' });
+  assert.doesNotMatch(c, /tar -[a-z]*z/);
+  assert.match(c, /gzip -dc \/tmp\/f\.tgz \| tar -xf - -C \/tmp\/fw/);
+});

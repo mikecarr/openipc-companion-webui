@@ -65,7 +65,7 @@ export function flashCommand({ soc, filename }) {
     `S=$(fw_printenv soc 2>/dev/null | sed 's/^[^=]*=//');`,
     `[ "$S" = "${soc}" ] || { echo "STOP: camera SoC is $S, firmware is for ${soc}"; exit 1; };`,
     `rm -rf /tmp/fw && mkdir /tmp/fw &&`,
-    `tar -xzf /tmp/${filename} -C /tmp/fw && rm -f /tmp/${filename} &&`,
+    `gzip -dc /tmp/${filename} | tar -xf - -C /tmp/fw && rm -f /tmp/${filename} &&`,
     // Find the images anywhere in the archive (some put them in a folder); show what's there if not.
     `K=$(find /tmp/fw -type f -name 'uImage*' ! -name '*.md5sum' | head -n 1);`,
     `R=$(find /tmp/fw -type f -name 'rootfs*' ! -name '*.md5sum' | head -n 1);`,
