@@ -31,12 +31,13 @@ export function flashFromFilename(name) {
 }
 
 // soc and flash come from the device; files that don't name a flash type are kept.
-export function filterAssets(assets, { soc = '', flash = '', text = '' } = {}) {
+export function filterAssets(assets, { soc = '', flash = '', sensor = '', sensorIndex = null, text = '' } = {}) {
   const words = text.toLowerCase().split(/[\s,]+/).filter(Boolean);
   return assets
     .filter(a => a.name.endsWith('.tgz'))
     .filter(a => !soc || socFromFilename(a.name) === soc.toLowerCase())
     .filter(a => !flash || !flashFromFilename(a.name) || flashFromFilename(a.name) === flash)
+    .filter(a => supportsSensor(a.name, sensor, sensorIndex))
     .filter(a => words.every(w => a.name.toLowerCase().includes(w)))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -153,4 +154,34 @@ export function parseMtdparts(value) {
     return pm ? { size: pm[1] === '-' ? 'rest' : pm[1].toUpperCase().replace(/([KM])$/, ' $1B'), name: pm[2] } : null;
   }).filter(Boolean);
   return parts.length ? { device: m[1], parts } : null;
+}
+
+// ---- Sensor support (builder images) ----
+
+// Sensor names an exclude list removes: sensor_imx347_mipi.ko, /etc/sensors/imx307.bin, ...
+export function excludedSensors(listText) {
+  const out = new Set();
+  for (const line of (listText || '').split(/\r?\n/)) {
+    if (line.trim().startsWith('#')) continue;
+    let m = /\/sensor_([a-z0-9]+?)(?:_mipi|_dvp|_lvds|_bt656)?\.ko$/i.exec(line.trim());
+    if (!m) m = /\/etc\/sensors\/([a-z0-9]+?)(?:_[a-z0-9_]+)?\.(?:bin|ini)$/i.exec(line.trim());
+    if (!m) m = /\/libsns_([a-z0-9]+?)(?:_[a-z0-9_]+)?\.so$/i.exec(line.trim());
+    if (m) out.add(m[1].toLowerCase());
+  }
+  return [...out].sort();
+}
+
+// Device dir name an asset belongs to (the longest device name the asset name starts with).
+export function deviceForAsset(name, devices) {
+  const base = name.replace(/\.tgz$/, '');
+  let best = '';
+  for (const d of devices) if ((base === d || base.startsWith(d + '-') || base.startsWith(d + '_') || base.startsWith(d + '.')) && d.length > best.length) best = d;
+  return best;
+}
+
+// false only when we know the image leaves this sensor out.
+export function supportsSensor(assetName, sensor, index) {
+  if (!sensor || !index?.excluded) return true;
+  const d = deviceForAsset(assetName, Object.keys(index.excluded));
+  return !d || !index.excluded[d].includes(sensor.toLowerCase());
 }

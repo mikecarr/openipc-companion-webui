@@ -93,3 +93,16 @@ test('mtdparts', () => {
   });
   assert.equal(parseMtdparts('garbage'), null);
 });
+
+import { excludedSensors, deviceForAsset, supportsSensor } from '../commands.js';
+
+test('sensor exclusions from builder lists', () => {
+  const list = '/etc/sensors/imx307.bin\n#\n/lib/modules/4.9.84/kernel/fs/nfs/nfs.ko\n/lib/modules/4.9.84/sigmastar/sensor_imx347_mipi.ko\n/usr/lib/sensors/libsns_ar0237.so\n/etc/sensors/ov2735_mipi_1080p.ini\n';
+  assert.deepEqual(excludedSensors(list), ['ar0237', 'imx307', 'imx347', 'ov2735']);
+  const index = { excluded: { 'ssc338q_apfpv_greg-generic-bu-eu': ['imx347'], 'ssc338q_apfpv_greg-generic-bu': ['x'] } };
+  assert.equal(deviceForAsset('ssc338q_apfpv_greg-generic-bu-eu-nor.tgz', Object.keys(index.excluded)), 'ssc338q_apfpv_greg-generic-bu-eu');
+  assert.equal(supportsSensor('ssc338q_apfpv_greg-generic-bu-eu.tgz', 'imx347', index), false);
+  assert.equal(supportsSensor('ssc338q_apfpv_greg-generic-bu-eu.tgz', 'imx415', index), true);
+  assert.equal(supportsSensor('openipc.ssc338q-nor-fpv.tgz', 'imx347', index), true);
+  assert.equal(filterAssets([{ name: 'ssc338q_apfpv_greg-generic-bu-eu.tgz' }, { name: 'openipc.ssc338q-nor-fpv.tgz' }], { soc: 'ssc338q', sensor: 'imx347', sensorIndex: index }).length, 1);
+});

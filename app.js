@@ -4,6 +4,8 @@ import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshU
 const $ = id => document.getElementById(id);
 const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
 const releaseCache = new Map();
+let sensorIndex = null; // sensors.json, built from OpenIPC/builder at deploy time
+fetch('sensors.json').then(r => (r.ok ? r.json() : null)).then(j => { sensorIndex = j; renderAssets(releaseCache.get($('source').value)?.tag); }).catch(() => {});
 
 function remember() {
   try { localStorage.setItem('flasher', JSON.stringify({ ip: $('ip').value, port: $('port').value, soc: $('soc').value, source: $('source').value })); } catch {}
@@ -37,9 +39,10 @@ async function loadReleases() {
 function renderAssets(tag) {
   const soc = $('soc').value.trim();
   const flash = state.device?.flash || '';
-  const list = filterAssets(state.assets, { soc, flash, text: $('filter').value });
+  const sensor = state.device?.sensor || '';
+  const list = filterAssets(state.assets, { soc, flash, sensor, sensorIndex, text: $('filter').value });
   if (state.filename && !state.fromLocal && !list.some(a => a.name === state.filename)) { state.filename = ''; state.url = null; update(); }
-  const scope = [soc, flash && `${flash.toUpperCase()} flash`].filter(Boolean).join(', ');
+  const scope = [soc, sensor && `${sensor} sensor`, flash && `${flash.toUpperCase()} flash`].filter(Boolean).join(', ');
   $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in release ${tag || 'latest'}` +
     (scope ? ` for ${scope}` : '') + (state.device ? ' (from the device)' : '') + '.';
   $('assets').replaceChildren(...list.map(a => {
@@ -119,7 +122,7 @@ function applyInfo(text) {
     return [dt, dd];
   }));
   $('infoOut').hidden = false; $('infoText').hidden = true;
-  $('infoHint').textContent = 'Device info loaded. The firmware list below now shows only files for this SoC and flash type.';
+  $('infoHint').textContent = 'Device info loaded. The firmware list below now shows only files for this SoC, sensor and flash type.';
   renderAssets(releaseCache.get($('source').value)?.tag); update();
   return true;
 }

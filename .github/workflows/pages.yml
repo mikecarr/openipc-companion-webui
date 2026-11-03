@@ -2,6 +2,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 4 * * *'   # daily: refresh sensor support from OpenIPC/builder
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,7 +29,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: mkdir site && cp index.html app.js commands.js helper-client.js style.css site/
+      - name: Build sensor index from OpenIPC/builder
+        run: |
+          git clone --depth 1 https://github.com/OpenIPC/builder /tmp/builder
+          node scripts/build-sensor-index.mjs /tmp/builder site/sensors.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
