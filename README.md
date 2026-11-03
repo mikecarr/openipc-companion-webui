@@ -41,6 +41,13 @@ The binaries are not code-signed yet, so macOS and Windows will warn on first ru
 Every push to `main` runs the tests and publishes to GitHub Pages
 (`.github/workflows/pages.yml`). One-time setup: Settings → Pages → Source: **GitHub Actions**.
 
+## Flash behaviour to expect
+
+A flash wipes the camera's saved settings (`sysupgrade -n`), on purpose. Newer firmware moves
+`sysupgrade` into RAM before writing, which ends SSH: the page then can't show progress, and says
+to keep the camera powered until it reboots by itself. A dropped connection only counts as finished
+if the output reached the end of the flash.
+
 ## Not covered yet
 
 - Companion's fallback for cameras whose kernel can't mount the new rootfs (`flashcp` per partition).

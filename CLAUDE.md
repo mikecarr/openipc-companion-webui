@@ -23,14 +23,23 @@ the user's machine; logic lives in this repo and deploys from GitHub.
 
 ## Camera facts (learned the hard way)
 - Cameras have no SFTP server: uploads must use legacy SCP (`scp -O` on the PC, `scp -t` remote).
-- Don't rely on `fw_printenv -n`; use `fw_printenv NAME | sed 's/^[^=]*=//'`.
+- Read variables with `fw_printenv NAME | sed 's/^[^=]*=//'`, which works with or without `-n`.
+  The failure that prompted this came from a bug in the test VM's mock; a real camera supports `-n`.
 - Flash sequence mirrors Companion's SysUpgradeService: SoC check, unpack in /tmp/fw,
-  `md5sum -c`, `sysupgrade --force_ver -n -z --kernel=... --rootfs=...`; the SSH session
-  dropping after flashing starts means the camera is rebooting (success).
+  `md5sum -c`, `sysupgrade --force_ver -n -z --kernel=... --rootfs=...`. `-n` wipes the overlay
+  (saved settings) on every flash; this is deliberate, so keep it. An SSH drop only means success
+  if the output reached the rootfs verify or the reboot line (`FlashTracker`, `flashOutcome`).
+- Newer sysupgrade (seen on 2.6.11.02 NOR) moves into RAM before writing when the camera has
+  `pivot_root` and `::restart:/sbin/init`: SSH ends with no writes done and no progress reaches the
+  page. It streams its log over plain HTTP on port 80 instead. Don't power off after that drop.
+- `mtdparts` can use U-Boot variables for sizes, e.g. `${rootmtd}(rootfs)`.
+- Real cameras may have no `sensor` variable in the environment; the info line falls back to the
+  loaded `sensor_*` driver in `lsmod`.
 - Firmware file names carry SoC and NOR/NAND, not sensor; sensor support comes from
   OpenIPC/builder `devices/*/general/scripts/excludes/*.list`.
-- Mike's test VM acting as a camera: 10.0.0.169 (Ubuntu + mock fw_printenv/sysupgrade, OpenSSH
-  not Dropbear; no /sys/class/mtd, no OPENIPC_VERSION).
+- Mike's test VM acting as a camera: 10.0.0.169 (Ubuntu, OpenSSH not Dropbear, no /sys/class/mtd).
+  Mock source is in `~/workspace` there (`fw_printenv-cli`, `sysupgrade-sim`). Env comes from
+  `~/.fw_env`; `/usr/local/bin/sysupgrade` wraps `sysupgrade.real` and then drops the SSH session.
 
 ## Not done yet
 - Companion's flashcp fallback when the kernel can't mount the new rootfs.
