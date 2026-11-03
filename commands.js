@@ -219,3 +219,45 @@ export function infoFromEnv(info, env) {
   }
   return out;
 }
+
+// ---- Firmware sources, matching Companion's defaults ----
+// latest: the repo's latest release. releases: pick from its releases. contents: files in the repo.
+const FIRMWARE_SOURCES = [
+  { id: 'OpenIPC/builder', kind: 'latest', sensorData: true },
+  { id: 'OpenIPC/firmware', kind: 'latest' },
+  { id: 'gilankpam/openipc-builder', kind: 'releases', experimental: true },
+  { id: 'sickgreg/OpenIPC_sickgregFPV_apfpv', kind: 'contents', branch: 'main', experimental: true },
+];
+
+export function firmwareSource(id) {
+  return FIRMWARE_SOURCES.find(s => s.id === id) || FIRMWARE_SOURCES[0];
+}
+
+export function sourceApiUrl(source) {
+  const base = `https://api.github.com/repos/${source.id}`;
+  if (source.kind === 'releases') return `${base}/releases?per_page=30`;
+  if (source.kind === 'contents') return `${base}/contents/?ref=${source.branch}`;
+  return `${base}/releases/latest`;
+}
+
+export function publishedReleases(list) {
+  return list
+    .filter(r => !r.draft && !r.prerelease && r.tag_name && r.published_at)
+    .sort((a, b) => b.published_at.localeCompare(a.published_at));
+}
+
+export function assetsFromRelease(release) {
+  return release.assets.map(a => ({ name: a.name, url: a.browser_download_url, size: a.size, updated: a.updated_at }));
+}
+
+export function assetsFromContents(list) {
+  return list
+    .filter(f => f.type === 'file' && f.name.endsWith('.tgz'))
+    .map(f => ({ name: f.name, url: f.download_url, size: f.size, updated: undefined }));
+}
+
+// The helper only downloads GitHub release files. Repository files allow browser downloads, so the
+// page fetches those and sends the bytes, the same way it sends a local file.
+export function needsPageDownload(url) {
+  return new URL(url).hostname === 'raw.githubusercontent.com';
+}

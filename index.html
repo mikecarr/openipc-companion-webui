@@ -45,10 +45,14 @@
         <select id="source">
           <option value="OpenIPC/builder">OpenIPC builder (FPV, per device)</option>
           <option value="OpenIPC/firmware">OpenIPC firmware (generic, per SoC)</option>
+          <option value="gilankpam/openipc-builder">Mabur (experimental)</option>
+          <option value="sickgreg/OpenIPC_sickgregFPV_apfpv">Greg APFPV (experimental)</option>
         </select>
       </label>
+      <label id="releaseField" hidden>Build <select id="release"></select></label>
       <label>Filter <input id="filter" placeholder="fpv, nor, thinker…" autocomplete="off"></label>
     </div>
+    <p id="experimentalWarn" class="warn" hidden>Experimental firmware is untested and may be buggy, lose your settings, or brick the device. Use it at your own risk, and keep a backup and a way to recover.</p>
     <p id="status" class="hint">Loading releases…</p>
     <ul id="assets" class="assets"></ul>
     <details>

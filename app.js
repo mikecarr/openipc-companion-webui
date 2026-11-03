@@ -1,5 +1,5 @@
 import { HelperClient, FlashTracker, TerminalLog, flashOutcome } from './helper-client.js';
-import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, setupUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
+import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, setupUrl, firmwareSource, sourceApiUrl, publishedReleases, assetsFromRelease, assetsFromContents, needsPageDownload, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
 const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
@@ -19,15 +19,20 @@ function restore() {
 
 async function loadReleases() {
   const repo = $('source').value;
+  const source = firmwareSource(repo);
+  $('experimentalWarn').hidden = !source.experimental;
+  $('releaseField').hidden = true;
+  state.assets = [];
   $('status').textContent = 'Loading releases…';
   try {
     if (!releaseCache.has(repo)) {
-      const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+      const res = await fetch(sourceApiUrl(source), { headers: { Accept: 'application/vnd.github+json' } });
       if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-      const rel = await res.json();
-      releaseCache.set(repo, { tag: rel.tag_name, assets: rel.assets.map(a => ({ name: a.name, url: a.browser_download_url, size: a.size, updated: a.updated_at })) });
+      releaseCache.set(repo, readSource(source, await res.json()));
     }
+    if ($('source').value !== repo) return; // The user switched source while this was loading.
     const rel = releaseCache.get(repo);
+    if (rel.releases) showBuilds(rel);
     state.assets = rel.assets;
     renderAssets(rel.tag);
   } catch (e) {
@@ -36,18 +41,40 @@ async function loadReleases() {
   }
 }
 
+function readSource(source, data) {
+  if (source.kind === 'contents') return { tag: `the ${source.branch} branch`, assets: assetsFromContents(data) };
+  if (source.kind === 'latest') return { tag: `release ${data.tag_name}`, assets: assetsFromRelease(data) };
+  const releases = publishedReleases(data);
+  if (!releases.length) throw new Error('no published releases');
+  return { releases, tag: `release ${releases[0].tag_name}`, assets: assetsFromRelease(releases[0]) };
+}
+
+function showBuilds(rel) {
+  const selected = rel.tag.replace('release ', '');
+  $('release').replaceChildren(...rel.releases.map((r, i) => {
+    const o = document.createElement('option');
+    o.value = r.tag_name;
+    o.textContent = `${r.published_at.slice(0, 10)} · ${r.tag_name}${i === 0 ? ' (latest)' : ''}`;
+    o.selected = r.tag_name === selected;
+    return o;
+  }));
+  $('releaseField').hidden = false;
+}
+
 function renderAssets(tag) {
   const soc = $('soc').value.trim();
   const flash = state.device?.flash || '';
   const sensor = state.device?.sensor || '';
-  const list = filterAssets(state.assets, { soc, flash, sensor, sensorIndex, text: $('filter').value });
+  // sensors.json comes from OpenIPC/builder, so it says nothing about other sources' images.
+  const index = firmwareSource($('source').value).sensorData ? sensorIndex : null;
+  const list = filterAssets(state.assets, { soc, flash, sensor, sensorIndex: index, text: $('filter').value });
   if (state.filename && !state.fromLocal && !list.some(a => a.name === state.filename)) { state.filename = ''; state.url = null; update(); }
   const scope = [soc, sensor && `${sensor} sensor`, flash && `${flash.toUpperCase()} flash`].filter(Boolean).join(', ');
   if (state.device && !soc) {
     $('status').textContent = `${list.length} firmware files. The camera didn't report its SoC, so the list isn't filtered; type it in the SoC box.`;
     return renderList(list, tag);
   }
-  $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in release ${tag || 'latest'}` +
+  $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in ${tag || 'the latest release'}` +
     (scope ? ` for ${scope}` : '') + (state.device ? ' (from the device)' : '') + '.';
   renderList(list, tag);
 }
@@ -208,7 +235,7 @@ function showLog(text) {
 async function flash() {
   const v = { ip: $('ip').value.trim(), port: $('port').value.trim() || '22', soc: $('soc').value.trim(), filename: state.filename };
   if (validate(v).length || !state.connected) return;
-  if (!confirm(`Flash ${v.filename} to ${v.ip}? Settings and the root password saved on the camera are erased, and it will reboot.`)) return;
+  if (!confirm(`Flash ${v.filename} to ${v.ip}? Settings and the root password saved on the camera are erased, and it will reboot.${firmwareSource($('source').value).experimental && !state.file ? ' This is experimental firmware, which may be buggy or brick the device.' : ''}`)) return;
   state.flashing = true; update();
   const bar = $('flashProgress'), status = $('flashStatus');
   bar.hidden = false; bar.value = 0; $('flashLog').textContent = ''; $('flashSetup').hidden = true;
@@ -216,7 +243,15 @@ async function flash() {
   const tracker = new FlashTracker();
   try {
     status.textContent = 'Uploading firmware…';
-    await state.helper.upload(`/tmp/${v.filename}`, state.file ? { file: state.file } : { url: state.url }, (sent, total, text) => {
+    let upload = state.file ? { file: state.file } : { url: state.url };
+    if (upload.url && needsPageDownload(upload.url)) {
+      status.textContent = 'Downloading firmware from GitHub…';
+      const res = await fetch(upload.url);
+      if (!res.ok) throw new Error(`could not download the firmware: GitHub answered ${res.status}`);
+      upload = { file: await res.blob() };
+      status.textContent = 'Uploading firmware…';
+    }
+    await state.helper.upload(`/tmp/${v.filename}`, upload, (sent, total, text) => {
       if (text) { status.textContent = 'Downloading firmware from GitHub…'; return; }
       bar.value = total ? Math.round((sent / total) * 30) : 0;
       status.textContent = `Uploading firmware… ${total ? Math.round((sent / total) * 100) : 0}%`;
@@ -370,6 +405,13 @@ restore();
 $('soc').addEventListener('input', () => { renderAssets(releaseCache.get($('source').value)?.tag); update(); });
 $('filter').addEventListener('input', () => renderAssets(releaseCache.get($('source').value)?.tag));
 $('source').addEventListener('change', () => { remember(); loadReleases(); });
+$('release').addEventListener('change', e => {
+  const rel = releaseCache.get($('source').value);
+  const release = rel.releases.find(r => r.tag_name === e.target.value);
+  rel.tag = `release ${release.tag_name}`; rel.assets = assetsFromRelease(release);
+  state.assets = rel.assets;
+  renderAssets(rel.tag);
+});
 $('localFile').addEventListener('change', e => onLocalFile(e.target.files[0]));
 update();
 loadReleases();
