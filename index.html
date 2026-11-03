@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenIPC Firmware Flasher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>OpenIPC Firmware Flasher</h1>
+    <p class="lead">Pick firmware, upload it with <code>scp</code>, flash it from
+      <a href="https://chromewebstore.google.com/search/secure%20shell" target="_blank" rel="noopener">Secure Shell</a>.
+      This page never connects to your camera; it only builds the commands.</p>
+  </header>
+
+  <section class="card">
+    <h2><span class="n">1</span> Camera</h2>
+    <div class="grid">
+      <label>IP address <input id="ip" placeholder="192.168.1.10" autocomplete="off"></label>
+      <label>SSH port <input id="port" value="22" inputmode="numeric"></label>
+      <label>SoC <input id="soc" placeholder="ssc338q" autocomplete="off"></label>
+    </div>
+    <p class="hint">Don't know the SoC? Run <code>fw_printenv -n soc</code> on the camera.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">2</span> Firmware</h2>
+    <div class="grid">
+      <label>Source
+        <select id="source">
+          <option value="OpenIPC/builder">OpenIPC builder (FPV, per device)</option>
+          <option value="OpenIPC/firmware">OpenIPC firmware (generic, per SoC)</option>
+        </select>
+      </label>
+      <label>Filter <input id="filter" placeholder="fpv, nor, thinker…" autocomplete="off"></label>
+    </div>
+    <p id="status" class="hint">Loading releases…</p>
+    <ul id="assets" class="assets"></ul>
+    <details>
+      <summary>Use a file I already have</summary>
+      <label>Local .tgz <input id="localFile" type="file" accept=".tgz,.gz"></label>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">3</span> Upload</h2>
+    <p>Download the firmware, then run this in your computer's terminal
+      (Terminal on macOS, PowerShell on Windows). It assumes the file is in your Downloads folder. <code>-O</code> is required: the camera has no SFTP server.</p>
+    <div class="cmd"><pre id="scpCmd">Pick a camera and firmware first.</pre><button data-copy="scpCmd">Copy</button></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">4</span> Flash</h2>
+    <p><a id="sshLink" class="button" href="#" aria-disabled="true">Open Secure Shell</a>
+      and paste this line. It checks the SoC and checksums before writing anything.</p>
+    <div class="cmd"><pre id="flashCmd">Pick a camera and firmware first.</pre><button data-copy="flashCmd">Copy</button></div>
+    <p class="warn">Do not unplug the camera while it flashes. It reboots by itself when done; the Secure Shell session will drop.</p>
+  </section>
+
+  <footer>
+    <p>Source on <a href="https://github.com/mikecarr/openipc-companion-webui">GitHub</a>. Same flash sequence as OpenIPC Companion.</p>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
