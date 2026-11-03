@@ -1,5 +1,5 @@
 import { HelperClient, FlashTracker, TerminalLog, flashOutcome } from './helper-client.js';
-import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
+import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, setupUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
 const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
@@ -164,10 +164,19 @@ $('infoText').addEventListener('input', e => applyInfo(e.target.value));
 
 // ---- Optional local helper: Connect, device info and Flash without copy and paste ----
 
+// Recent firmware has no root password after a flash or reset, and SSH can't log in until one is set.
+function showSetupLink(el, ip, before) {
+  const a = document.createElement('a');
+  a.href = setupUrl(ip); a.textContent = setupUrl(ip); a.target = '_blank'; a.rel = 'noopener';
+  el.replaceChildren(before, a, ' to set one, then connect with it.');
+  el.hidden = false;
+}
+
 async function connectCamera() {
   const ip = $('ip').value.trim(), port = $('port').value.trim() || '22';
   if (validate({ ip, port, soc: 'x', filename: 'x.tgz' }).length) throw new Error('enter the camera IP address first');
   $('connectBtn').disabled = true;
+  $('connectSetup').hidden = true;
   $('infoHint').textContent = `Connecting to ${ip}…`;
   try {
     await state.helper.connect({ host: ip, port, password: $('password').value });
@@ -181,6 +190,7 @@ async function connectCamera() {
     state.connected = false;
     $('connectBtn').textContent = 'Connect';
     $('infoHint').textContent = `Could not connect: ${e.message}`;
+    if (/login failed/.test(e.message)) showSetupLink($('connectSetup'), ip, 'If this camera was just flashed or reset, it has no root password yet. Open ');
     throw e;
   } finally {
     $('connectBtn').disabled = false;
@@ -198,10 +208,10 @@ function showLog(text) {
 async function flash() {
   const v = { ip: $('ip').value.trim(), port: $('port').value.trim() || '22', soc: $('soc').value.trim(), filename: state.filename };
   if (validate(v).length || !state.connected) return;
-  if (!confirm(`Flash ${v.filename} to ${v.ip}? Settings saved on the camera are erased, and it will reboot.`)) return;
+  if (!confirm(`Flash ${v.filename} to ${v.ip}? Settings and the root password saved on the camera are erased, and it will reboot.`)) return;
   state.flashing = true; update();
   const bar = $('flashProgress'), status = $('flashStatus');
-  bar.hidden = false; bar.value = 0; $('flashLog').textContent = '';
+  bar.hidden = false; bar.value = 0; $('flashLog').textContent = ''; $('flashSetup').hidden = true;
   const output = new TerminalLog();
   const tracker = new FlashTracker();
   try {
@@ -223,9 +233,10 @@ async function flash() {
     if (r.disconnected || !['not-started', 'failed'].includes(outcome.kind)) state.connected = false;
     if (outcome.percent) bar.value = outcome.percent;
     status.textContent = outcome.message;
+    if (outcome.passwordErased) showSetupLink($('flashSetup'), v.ip, 'Recent firmware has no root password after a flash. When the camera is back, open ');
   } catch (e) {
     // Losing the helper doesn't stop the camera: if sysupgrade began, it may still be writing.
-    if (tracker.started) { state.connected = false; status.textContent = `${e.message}. ${flashOutcome({ disconnected: true, code: -1 }, tracker).message}`; }
+    if (tracker.started) { state.connected = false; status.textContent = `${e.message}. ${flashOutcome({ disconnected: true, code: -1 }, tracker).message}`; showSetupLink($('flashSetup'), v.ip, 'Recent firmware has no root password after a flash. When the camera is back, open '); }
     else status.textContent = `Failed: ${e.message}`;
   } finally {
     state.flashing = false;

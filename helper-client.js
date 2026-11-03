@@ -129,12 +129,12 @@ export class FlashTracker {
 // either: the helper can report it when no exit status arrived.
 export function flashOutcome({ disconnected, code }, tracker) {
   const checkLater = 'Keep the camera powered, wait a few minutes, then reconnect and check the firmware version.';
-  if (tracker.complete) return { kind: 'rebooting', percent: 100, message: 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.' };
+  if (tracker.complete) return { kind: 'rebooting', percent: 100, passwordErased: true, message: 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.' };
   if (tracker.nothingWritten && tracker.percent === 0) return { kind: 'not-started', message: `sysupgrade stopped without writing anything${disconnected ? ' and the connection closed' : ` (exit code ${code})`}. See the log above.` };
-  if (tracker.handedOff && (disconnected || code === 0)) return { kind: 'handed-off', message: 'sysupgrade moved into the camera\'s RAM to flash, so SSH has ended as expected and progress can\'t be shown here. Keep the camera powered: it reboots by itself when it is done. Wait a few minutes, then reconnect and check the firmware version.' };
+  if (tracker.handedOff && (disconnected || code === 0)) return { kind: 'handed-off', passwordErased: true, message: 'sysupgrade moved into the camera\'s RAM to flash, so SSH has ended as expected and progress can\'t be shown here. Keep the camera powered: it reboots by itself when it is done. Wait a few minutes, then reconnect and check the firmware version.' };
   if (disconnected && !tracker.started) return { kind: 'not-started', message: `The connection dropped before the page saw flashing start, so it probably didn't. To be safe, keep the camera powered for a few minutes, then reconnect and check it before trying again.` };
-  if (disconnected) return { kind: 'interrupted', message: `The connection dropped while sysupgrade was running, so the flash may not have completed. ${checkLater}` };
-  if (code === 0) return { kind: 'interrupted', message: `sysupgrade ended without reporting that the flash finished. ${checkLater}` };
+  if (disconnected) return { kind: 'interrupted', passwordErased: true, message: `The connection dropped while sysupgrade was running, so the flash may not have completed. ${checkLater}` };
+  if (code === 0) return { kind: 'interrupted', passwordErased: true, message: `sysupgrade ended without reporting that the flash finished. ${checkLater}` };
   if (tracker.started) return { kind: 'failed', message: `sysupgrade failed (exit code ${code}) and the flash may be incomplete. See the log above, and keep the camera powered until you have checked it.` };
   return { kind: 'not-started', message: `Stopped before flashing (exit code ${code}). See the log above.` };
 }

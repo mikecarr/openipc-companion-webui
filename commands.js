@@ -76,6 +76,11 @@ export function flashCommand({ soc, filename }) {
   ].join(' ');
 }
 
+// A camera with no root password yet (just flashed or reset) offers its setup page here.
+export function setupUrl(ip) {
+  return `http://${hostForScp(ip)}/`;
+}
+
 export function sshUrl({ ip, port = 22 }) {
   const p = Number(port) === 22 ? '' : `:${Number(port)}`;
   return `ssh://root@${hostForScp(ip)}${p}`;
