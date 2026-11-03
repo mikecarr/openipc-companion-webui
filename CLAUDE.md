@@ -44,6 +44,8 @@ the user's machine; logic lives in this repo and deploys from GitHub.
 - `mtdparts` can use U-Boot variables for sizes, e.g. `${rootmtd}(rootfs)`.
 - Real cameras may have no `sensor` variable in the environment; the info line falls back to the
   loaded `sensor_*` driver in `lsmod`.
+- Firmware sources match Companion's defaults (`FIRMWARE_SOURCES` in `commands.js`). The helper only
+  downloads GitHub release files, so the page fetches Greg APFPV's repository files itself.
 - Firmware file names carry SoC and NOR/NAND, not sensor; sensor support comes from
   OpenIPC/builder `devices/*/general/scripts/excludes/*.list`.
 - Mike's test VM acting as a camera: 10.0.0.169 (Ubuntu, OpenSSH not Dropbear, no /sys/class/mtd).

@@ -10,8 +10,10 @@ It never connects to the camera. It picks the firmware and builds two commands:
    the camera's SoC doesn't match or a checksum fails, then runs
    `sysupgrade --force_ver -n -z --kernel=... --rootfs=...`, the same call OpenIPC Companion makes.
 
-Firmware lists come from the latest releases of `OpenIPC/builder` and `OpenIPC/firmware`
-(GitHub API, called from the browser). A local `.tgz` can be picked instead; the page unpacks it in
+Firmware lists come from the latest releases of `OpenIPC/builder` and `OpenIPC/firmware`, plus two
+experimental community sources, the same defaults as Companion: Mabur (`gilankpam/openipc-builder`
+releases) and Greg APFPV (files in `sickgreg/OpenIPC_sickgregFPV_apfpv`). All use the GitHub API,
+called from the browser. A local `.tgz` can be picked instead; the page unpacks it in
 the browser to check it contains a kernel, a rootfs and checksum files.
 
 ## Optional helper (Flash button)

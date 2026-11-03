@@ -368,3 +368,58 @@ test('a flash that stopped early keeps the existing password', () => {
   assert.ok(!flashOutcome({ disconnected: false, code: 1 }, tracked('STOP: camera SoC is x\n')).passwordErased);
   assert.ok(!flashOutcome({ disconnected: false, code: 1 }, tracked('OPENIPC-FLASH-START\nToo big. Nothing was written.\n')).passwordErased);
 });
+
+import { firmwareSource, sourceApiUrl, publishedReleases, assetsFromRelease, assetsFromContents, needsPageDownload } from '../commands.js';
+
+test('experimental sources are flagged and the OpenIPC ones are not', () => {
+  assert.ok(firmwareSource('gilankpam/openipc-builder').experimental);
+  assert.ok(firmwareSource('sickgreg/OpenIPC_sickgregFPV_apfpv').experimental);
+  assert.ok(!firmwareSource('OpenIPC/builder').experimental);
+  assert.ok(!firmwareSource('OpenIPC/firmware').experimental);
+});
+
+test('an unknown saved source falls back to OpenIPC builder', () => {
+  assert.equal(firmwareSource('someone/else').id, 'OpenIPC/builder');
+});
+
+test('each kind of source reads from the right GitHub address', () => {
+  assert.equal(sourceApiUrl(firmwareSource('OpenIPC/builder')), 'https://api.github.com/repos/OpenIPC/builder/releases/latest');
+  assert.equal(sourceApiUrl(firmwareSource('gilankpam/openipc-builder')), 'https://api.github.com/repos/gilankpam/openipc-builder/releases?per_page=30');
+  assert.equal(sourceApiUrl(firmwareSource('sickgreg/OpenIPC_sickgregFPV_apfpv')), 'https://api.github.com/repos/sickgreg/OpenIPC_sickgregFPV_apfpv/contents/?ref=main');
+});
+
+test('release list skips drafts and pre-releases, newest first', () => {
+  const list = publishedReleases([
+    { tag_name: 'mabur-old', draft: false, prerelease: false, published_at: '2026-10-23T17:00:00Z' },
+    { tag_name: 'mabur-beta', draft: false, prerelease: true, published_at: '2026-10-26T00:00:00Z' },
+    { tag_name: 'mabur-draft', draft: true, prerelease: false, published_at: '2026-10-27T00:00:00Z' },
+    { tag_name: 'mabur-unpublished', draft: false, prerelease: false, published_at: null },
+    { tag_name: 'mabur-new', draft: false, prerelease: false, published_at: '2026-10-25T09:00:00Z' },
+  ]);
+  assert.deepEqual(list.map(r => r.tag_name), ['mabur-new', 'mabur-old']);
+});
+
+test('release assets keep the download address the helper accepts', () => {
+  const [a] = assetsFromRelease({ assets: [{ name: 'a.tgz', browser_download_url: 'https://github.com/o/r/releases/download/t/a.tgz', size: 5, updated_at: 'x' }] });
+  assert.deepEqual(a, { name: 'a.tgz', url: 'https://github.com/o/r/releases/download/t/a.tgz', size: 5, updated: 'x' });
+});
+
+test('repository contents lists only top-level firmware files', () => {
+  const list = assetsFromContents([
+    { type: 'file', name: 'openipc.ssc338q-nor-apfpv-greg10.2.tgz', size: 9, download_url: 'https://raw.githubusercontent.com/o/r/main/f.tgz' },
+    { type: 'dir', name: 'old.tgz', size: 0, download_url: null },
+    { type: 'file', name: 'README.md', size: 1, download_url: 'https://raw.githubusercontent.com/o/r/main/README.md' },
+  ]);
+  assert.deepEqual(list, [{ name: 'openipc.ssc338q-nor-apfpv-greg10.2.tgz', url: 'https://raw.githubusercontent.com/o/r/main/f.tgz', size: 9, updated: undefined }]);
+});
+
+test('files the helper refuses to fetch are downloaded by the page', () => {
+  assert.equal(needsPageDownload('https://raw.githubusercontent.com/o/r/main/f.tgz'), true);
+  assert.equal(needsPageDownload('https://github.com/o/r/releases/download/t/f.tgz'), false);
+  assert.equal(needsPageDownload('https://raw.githubusercontent.com.evil.example/f.tgz'), false);
+});
+
+test('new sources are recognised by the firmware filters', () => {
+  const a = ['openipc.ssc338q-nor-apfpv-greg10.2.tgz', 'openipc.ssc30kq-nor-apfpv-greg10.2.tgz', 'ssc338q_fpv_openipc-urllc-aio-nor.tgz'].map(name => ({ name }));
+  assert.deepEqual(filterAssets(a, { soc: 'ssc338q', flash: 'nor' }).map(x => x.name), ['openipc.ssc338q-nor-apfpv-greg10.2.tgz', 'ssc338q_fpv_openipc-urllc-aio-nor.tgz']);
+});
