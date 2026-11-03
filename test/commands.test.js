@@ -349,3 +349,22 @@ test('flash command unpacks without tar -z, which BusyBox tar on cameras may lac
   assert.doesNotMatch(c, /tar -[a-z]*z/);
   assert.match(c, /gzip -dc \/tmp\/f\.tgz \| tar -xf - -C \/tmp\/fw/);
 });
+
+import { setupUrl } from '../commands.js';
+
+test('setup page address works for IPv4 and IPv6 cameras', () => {
+  assert.equal(setupUrl('192.168.1.10'), 'http://192.168.1.10/');
+  assert.equal(setupUrl('fe80::1'), 'http://[fe80::1]/');
+});
+
+test('a flash that may have reached the camera says a new password is needed', () => {
+  const whole = FLASH_LOG.kernel + FLASH_LOG.rootfsMid + FLASH_LOG.rootfsEnd;
+  assert.equal(flashOutcome({ disconnected: true, code: -1 }, tracked(whole)).passwordErased, true);
+  assert.equal(flashOutcome({ disconnected: true, code: -1 }, tracked('OPENIPC-FLASH-START\n' + HANDOFF)).passwordErased, true);
+  assert.equal(flashOutcome({ disconnected: true, code: -1 }, tracked(FLASH_LOG.kernel + FLASH_LOG.rootfsMid)).passwordErased, true);
+});
+
+test('a flash that stopped early keeps the existing password', () => {
+  assert.ok(!flashOutcome({ disconnected: false, code: 1 }, tracked('STOP: camera SoC is x\n')).passwordErased);
+  assert.ok(!flashOutcome({ disconnected: false, code: 1 }, tracked('OPENIPC-FLASH-START\nToo big. Nothing was written.\n')).passwordErased);
+});

@@ -30,9 +30,17 @@ the user's machine; logic lives in this repo and deploys from GitHub.
   `md5sum -c`, `sysupgrade --force_ver -n -z --kernel=... --rootfs=...`. `-n` wipes the overlay
   (saved settings) on every flash; this is deliberate, so keep it. An SSH drop only means success
   if the output reached the rootfs verify or the reboot line (`FlashTracker`, `flashOutcome`).
+- `sysupgrade -n` leaves firmware built since 30 Aug 2026 unclaimed: no root password, no default,
+  and `/setup.html` on port 80. Commands and scp are refused until claimed. The helper's password
+  login just fails, so it can't tell this from a wrong password.
 - Newer sysupgrade (seen on 2.6.11.02 NOR) moves into RAM before writing when the camera has
   `pivot_root` and `::restart:/sbin/init`: SSH ends with no writes done and no progress reaches the
   page. It streams its log over plain HTTP on port 80 instead. Don't power off after that drop.
+- On nightly 2.6.11.02 NOR, Majestic listens on ports 80 and 554 and runs the web UI's CGI scripts
+  in `/var/www/cgi-bin`. The web UI can flash by itself (`update.cgi`). Forks can differ: a
+  `gilankpam` build ran `maburd` with no Majestic.
+- A real flash from the page has worked end to end on a real camera: upload, RAM handoff, reboot,
+  claim, log back in (ssc338q NOR, to `nightly-20261102-8cfa8f9`).
 - `mtdparts` can use U-Boot variables for sizes, e.g. `${rootmtd}(rootfs)`.
 - Real cameras may have no `sensor` variable in the environment; the info line falls back to the
   loaded `sensor_*` driver in `lsmod`.

@@ -34,6 +34,7 @@
     </div>
     <p id="infoHint" class="hint">Fills in the SoC for you. "Get device info" copies a command and opens Secure Shell:
       paste it there, select the line it prints (starting with <code>OPENIPC-INFO</code>), then click "Paste result".</p>
+    <p id="connectSetup" class="hint" hidden></p>
     <textarea id="infoText" rows="2" placeholder="Or paste the OPENIPC-INFO line here" hidden></textarea>
   </section>
 
@@ -62,6 +63,7 @@
     <button id="flashBtn" type="button" disabled>Flash now</button>
     <progress id="flashProgress" max="100" value="0" hidden></progress>
     <p id="flashStatus" class="hint"></p>
+    <p id="flashSetup" class="hint" hidden></p>
     <pre id="flashLog" class="log" hidden></pre>
     <p class="warn">Do not unplug the camera while it flashes. It reboots by itself when done.</p>
   </section>
