@@ -108,7 +108,9 @@ export function parseInfo(text) {
     const i = part.indexOf('=');
     if (i > 0) info[part.slice(0, i).trim()] = part.slice(i + 1).trim();
   }
+  if (info.soc) info.soc = info.soc.toLowerCase();
   if (info.soc && !SOC_RE.test(info.soc)) delete info.soc;
+  if (info.sensor) info.sensor = normalizeSensor(info.sensor);
   if (info.flash) info.flash = /nand/i.test(info.flash) ? 'nand' : 'nor';
   return info;
 }
@@ -184,4 +186,22 @@ export function supportsSensor(assetName, sensor, index) {
   if (!sensor || !index?.excluded) return true;
   const d = deviceForAsset(assetName, Object.keys(index.excluded));
   return !d || !index.excluded[d].includes(sensor.toLowerCase());
+}
+
+// "IMX415", "imx415_mipi" -> "imx415"
+export function normalizeSensor(v) {
+  return (v || '').trim().toLowerCase().split(/[_\s]/)[0].replace(/[^a-z0-9]/g, '');
+}
+
+// Fill gaps in the one-line info from the full fw_printenv output.
+export function infoFromEnv(info, env) {
+  const get = k => env.find(e => e.key === k)?.value?.trim() || '';
+  const out = { ...(info || {}) };
+  if (!out.soc && SOC_RE.test(get('soc').toLowerCase())) out.soc = get('soc').toLowerCase();
+  if (!out.sensor && get('sensor')) out.sensor = normalizeSensor(get('sensor'));
+  if (!out.flash) {
+    const mtd = parseMtdparts(get('mtdparts') || (/mtdparts=\S+/.exec(get('bootargs')) || [''])[0]);
+    if (mtd) out.flash = /nand/i.test(mtd.device) ? 'nand' : 'nor';
+  }
+  return out;
 }

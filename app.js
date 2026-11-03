@@ -1,5 +1,5 @@
 import { HelperClient, flashPercent } from './helper-client.js';
-import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, parseEnv, groupEnv, parseMtdparts } from './commands.js';
+import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
 const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
@@ -43,8 +43,16 @@ function renderAssets(tag) {
   const list = filterAssets(state.assets, { soc, flash, sensor, sensorIndex, text: $('filter').value });
   if (state.filename && !state.fromLocal && !list.some(a => a.name === state.filename)) { state.filename = ''; state.url = null; update(); }
   const scope = [soc, sensor && `${sensor} sensor`, flash && `${flash.toUpperCase()} flash`].filter(Boolean).join(', ');
+  if (state.device && !soc) {
+    $('status').textContent = `${list.length} firmware files. The camera didn't report its SoC, so the list isn't filtered; type it in the SoC box.`;
+    return renderList(list, tag);
+  }
   $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in release ${tag || 'latest'}` +
     (scope ? ` for ${scope}` : '') + (state.device ? ' (from the device)' : '') + '.';
+  renderList(list, tag);
+}
+
+function renderList(list, tag) {
   $('assets').replaceChildren(...list.map(a => {
     const li = document.createElement('li');
     const pick = document.createElement('button');
@@ -300,6 +308,13 @@ async function loadEnv() {
     const r = await state.helper.execText('fw_printenv 2>&1');
     state.env = parseEnv(r.out);
     renderEnv();
+    // The one-line info can miss values (older fw_printenv without -n); fill them from the full env.
+    const merged = infoFromEnv(state.device, state.env);
+    if (JSON.stringify(merged) !== JSON.stringify(state.device || {})) {
+      state.device = merged;
+      if (merged.soc) $('soc').value = merged.soc;
+      renderAssets(releaseCache.get($('source').value)?.tag); update();
+    }
   } catch (e) {
     $('envGroups').replaceChildren(el('p', 'hint', `Could not read fw_printenv: ${e.message}`));
   }

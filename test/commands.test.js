@@ -106,3 +106,11 @@ test('sensor exclusions from builder lists', () => {
   assert.equal(supportsSensor('openipc.ssc338q-nor-fpv.tgz', 'imx347', index), true);
   assert.equal(filterAssets([{ name: 'ssc338q_apfpv_greg-generic-bu-eu.tgz' }, { name: 'openipc.ssc338q-nor-fpv.tgz' }], { soc: 'ssc338q', sensor: 'imx347', sensorIndex: index }).length, 1);
 });
+
+import { infoFromEnv } from '../commands.js';
+
+test('device info falls back to full env', () => {
+  const env = parseEnv('soc=SSC338Q\nsensor=imx415_mipi\nbootargs=console=ttyS0 mtdparts=NOR_FLASH:256k(boot),-(rest)\n');
+  assert.deepEqual(infoFromEnv({ soc: '', host: 'cam' }, env), { soc: 'ssc338q', sensor: 'imx415', flash: 'nor', host: 'cam' });
+  assert.equal(parseInfo('OPENIPC-INFO soc=SSC338Q;sensor=IMX415').soc, 'ssc338q');
+});
