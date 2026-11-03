@@ -22,7 +22,14 @@
       <label>SSH port <input id="port" value="22" inputmode="numeric"></label>
       <label>SoC <input id="soc" placeholder="ssc338q" autocomplete="off"></label>
     </div>
-    <p class="hint">Don't know the SoC? Run <code>fw_printenv -n soc</code> on the camera.</p>
+    <div class="info">
+      <button id="getInfo" type="button">Get device info</button>
+      <button id="pasteInfo" type="button" class="secondary">Paste result</button>
+    </div>
+    <p id="infoHint" class="hint">Fills in the SoC for you. "Get device info" copies a command and opens Secure Shell:
+      paste it there, select the line it prints (starting with <code>OPENIPC-INFO</code>), then click "Paste result".</p>
+    <textarea id="infoText" rows="2" placeholder="Or paste the OPENIPC-INFO line here" hidden></textarea>
+    <dl id="infoOut" class="infoOut" hidden></dl>
   </section>
 
   <section class="card">

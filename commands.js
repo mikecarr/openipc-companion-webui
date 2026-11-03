@@ -83,3 +83,23 @@ export function tarNames(bytes) {
   }
   return names;
 }
+
+// Device info: one line the user runs in Secure Shell. The output is a single
+// "OPENIPC-INFO key=value;..." line the page can parse back from the clipboard.
+export const INFO_COMMAND =
+  `echo "OPENIPC-INFO soc=$(fw_printenv -n soc 2>/dev/null);sensor=$(fw_printenv -n sensor 2>/dev/null);` +
+  `flash=$(grep -o 'mtdparts=[^:]*' /proc/cmdline | cut -d= -f2);host=$(hostname -s);` +
+  `ver=$(sed -n 's/^OPENIPC_VERSION=//p' /etc/os-release | tr -d '\\"')"`;
+
+export function parseInfo(text) {
+  const m = /OPENIPC-INFO\s+(\S.*)/.exec(text || '');
+  if (!m) return null;
+  const info = {};
+  for (const part of m[1].trim().split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) info[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+  }
+  if (info.soc && !SOC_RE.test(info.soc)) delete info.soc;
+  if (info.flash) info.flash = /nand/i.test(info.flash) ? 'nand' : 'nor';
+  return info;
+}

@@ -41,3 +41,19 @@ test('tar names', () => {
   tar.set(block('rootfs.squashfs.ssc338q', 0), 1024);
   assert.deepEqual(tarNames(tar), ['uImage.ssc338q', 'rootfs.squashfs.ssc338q']);
 });
+
+import { INFO_COMMAND, parseInfo } from '../commands.js';
+
+test('parse device info line', () => {
+  const i = parseInfo('root@cam:~# OPENIPC-INFO soc=ssc338q;sensor=imx415;flash=NOR_FLASH;host=openipc-ssc338q;ver=2.6.10.21\n');
+  assert.deepEqual(i, { soc: 'ssc338q', sensor: 'imx415', flash: 'nor', host: 'openipc-ssc338q', ver: '2.6.10.21' });
+  assert.equal(parseInfo('nothing here'), null);
+  assert.equal(parseInfo('OPENIPC-INFO soc=$(evil);host=x').soc, undefined);
+  assert.equal(parseInfo('OPENIPC-INFO flash=nand0').flash, 'nand');
+});
+
+test('info command prints a parseable line', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const out = execFileSync('sh', ['-c', INFO_COMMAND], { encoding: 'utf8' });
+  assert.ok(parseInfo(out));
+});

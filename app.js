@@ -1,4 +1,4 @@
-import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames } from './commands.js';
+import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo } from './commands.js';
 
 const $ = id => document.getElementById(id);
 const state = { assets: [], filename: '', fromLocal: false };
@@ -100,6 +100,40 @@ document.addEventListener('click', e => {
     e.target.textContent = 'Copied'; setTimeout(() => (e.target.textContent = 'Copy'), 1500);
   });
 });
+
+function applyInfo(text) {
+  const info = parseInfo(text);
+  if (!info) { $('infoHint').textContent = 'No OPENIPC-INFO line found. Copy the whole line the command printed and try again.'; return false; }
+  if (info.soc) $('soc').value = info.soc;
+  if (info.flash && !$('filter').value.trim()) $('filter').value = info.flash;
+  const labels = { soc: 'SoC', sensor: 'Sensor', flash: 'Flash', host: 'Hostname', ver: 'Firmware' };
+  $('infoOut').replaceChildren(...Object.entries(labels).filter(([k]) => info[k]).flatMap(([k, l]) => {
+    const dt = document.createElement('dt'); dt.textContent = l;
+    const dd = document.createElement('dd'); dd.textContent = info[k];
+    return [dt, dd];
+  }));
+  $('infoOut').hidden = false; $('infoText').hidden = true;
+  $('infoHint').textContent = 'Device info loaded.';
+  renderAssets(releaseCache.get($('source').value)?.tag); update();
+  return true;
+}
+
+$('getInfo').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(INFO_COMMAND); } catch {}
+  const ip = $('ip').value.trim();
+  if (ip && !validate({ ip, port: $('port').value || 22, soc: 'x', filename: 'x.tgz' }).length) {
+    window.open(sshUrl({ ip, port: $('port').value || 22 }), '_blank');
+    $('infoHint').textContent = 'Command copied. Paste it into Secure Shell, select the OPENIPC-INFO line it prints, then click "Paste result".';
+  } else {
+    $('infoHint').textContent = 'Command copied. Enter the IP address first so Secure Shell can open, or run it in any SSH session.';
+  }
+});
+$('pasteInfo').addEventListener('click', async () => {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch {}
+  if (!applyInfo(text)) { $('infoText').hidden = false; $('infoText').focus(); }
+});
+$('infoText').addEventListener('input', e => applyInfo(e.target.value));
 
 restore();
 ['ip', 'port'].forEach(id => $(id).addEventListener('input', update));

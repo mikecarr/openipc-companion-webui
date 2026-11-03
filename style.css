@@ -31,3 +31,9 @@ button, .button { font: inherit; font-size: .9rem; cursor: pointer; border-radiu
 .dl { white-space: nowrap; color: var(--accent); }
 .warn { color: var(--warn); font-size: .9rem; }
 details { margin-top: 8px; }
+.info { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+button.secondary { background: transparent; color: var(--accent); }
+textarea { width: 100%; font: .85rem ui-monospace, Menlo, Consolas, monospace; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.infoOut { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0 0; }
+.infoOut dt { color: var(--muted); }
+.infoOut dd { margin: 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
