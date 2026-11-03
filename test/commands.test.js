@@ -183,7 +183,8 @@ test('dropped connection in the middle of a write is not reported as success', (
 test('dropped connection before sysupgrade started says nothing was written', () => {
   const o = flashOutcome({ disconnected: true, code: -1 }, tracked('uImage.ssc338q: OK\n'));
   assert.equal(o.kind, 'not-started');
-  assert.match(o.message, /Nothing was written/);
+  assert.doesNotMatch(o.message, /Nothing was written/, 'a missing marker may just mean the output was lost');
+  assert.match(o.message, /keep the camera powered/i);
 });
 
 test('non-zero exit before sysupgrade is reported as stopped before flashing', () => {
@@ -199,10 +200,17 @@ test('non-zero exit after writing began is not reported as stopped before flashi
   assert.match(o.message, /exit code 1/);
 });
 
-test('exit code zero is done', () => {
-  const o = flashOutcome({ disconnected: false, code: 0 }, tracked(FLASH_LOG.kernel));
+test('exit code zero after the reboot line is done', () => {
+  const o = flashOutcome({ disconnected: false, code: 0 }, tracked(FLASH_LOG.kernel + 'Unconditional reboot\n'));
   assert.equal(o.kind, 'rebooting');
   assert.equal(o.percent, 100);
+});
+
+test('exit code zero without the end of the flash is not success', () => {
+  // The helper can report 0 when no exit status arrived, for example if the process was killed.
+  const o = flashOutcome({ disconnected: false, code: 0 }, tracked(FLASH_LOG.kernel + FLASH_LOG.rootfsMid));
+  assert.equal(o.kind, 'interrupted');
+  assert.equal(o.percent, undefined);
 });
 
 // Wording from the camera's /usr/sbin/sysupgrade (2.6.11.02), which moves flashing into RAM.
@@ -277,4 +285,27 @@ test('info prefers the sensor set in the environment over the loaded driver', as
 test('info leaves the sensor empty when neither source has one', async () => {
   const i = await infoWith({ fw_printenv: 'exit 1', lsmod: 'echo "mi_sensor 21952 0"' });
   assert.ok(!i.sensor);
+});
+
+test('a refusal after writing began is not reported as nothing written', () => {
+  const o = flashOutcome({ disconnected: false, code: 1 }, tracked(FLASH_LOG.kernel + 'Update rootfs from /tmp/r\nImage too big. Nothing was written.\n'));
+  assert.equal(o.kind, 'failed');
+  assert.doesNotMatch(o.message, /without writing/);
+});
+
+test('a handoff that exits with an error over a live session is a failure', () => {
+  const o = flashOutcome({ disconnected: false, code: 1 }, tracked('OPENIPC-FLASH-START\n' + HANDOFF));
+  assert.equal(o.kind, 'failed');
+  assert.match(o.message, /exit code 1/);
+});
+
+test('a non-zero exit after the flash reached the end still counts as finished', () => {
+  const o = flashOutcome({ disconnected: false, code: 137 }, tracked(FLASH_LOG.kernel + FLASH_LOG.rootfsMid + FLASH_LOG.rootfsEnd + 'Unconditional reboot\n'));
+  assert.equal(o.kind, 'rebooting');
+});
+
+test('mtdparts keeps a partition whose variable holds an unusual size', () => {
+  assert.deepEqual(parseMtdparts('NOR:${a}(x),${b}(y),${constructor}(z)', { a: '0x800000', b: '' }).parts, [
+    { size: '?', name: 'x' }, { size: '?', name: 'y' }, { size: '?', name: 'z' },
+  ]);
 });

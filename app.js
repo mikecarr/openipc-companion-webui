@@ -201,6 +201,7 @@ async function flash() {
   state.flashing = true; update();
   const bar = $('flashProgress'), status = $('flashStatus');
   bar.hidden = false; bar.value = 0; $('flashLog').textContent = '';
+  const tracker = new FlashTracker();
   try {
     status.textContent = 'Uploading firmware…';
     await state.helper.upload(`/tmp/${v.filename}`, state.file ? { file: state.file } : { url: state.url }, (sent, total, text) => {
@@ -209,18 +210,20 @@ async function flash() {
       status.textContent = `Uploading firmware… ${total ? Math.round((sent / total) * 100) : 0}%`;
     });
     status.textContent = 'Checking and flashing. Do not unplug the camera.';
-    const tracker = new FlashTracker();
     const r = await state.helper.exec(flashCommand(v), text => {
       log(text);
       tracker.feed(text);
       bar.value = 30 + Math.round(tracker.percent * 0.7);
     });
-    if (r.disconnected) state.connected = false;
     const outcome = flashOutcome(r, tracker);
+    // Only a command that stopped by itself leaves the SSH session usable.
+    if (r.disconnected || !['not-started', 'failed'].includes(outcome.kind)) state.connected = false;
     if (outcome.percent) bar.value = outcome.percent;
     status.textContent = outcome.message;
   } catch (e) {
-    status.textContent = `Failed: ${e.message}`;
+    // Losing the helper doesn't stop the camera: if sysupgrade began, it may still be writing.
+    if (tracker.started) { state.connected = false; status.textContent = `${e.message}. ${flashOutcome({ disconnected: true, code: -1 }, tracker).message}`; }
+    else status.textContent = `Failed: ${e.message}`;
   } finally {
     state.flashing = false;
     $('connectBtn').textContent = state.connected ? 'Connected' : 'Connect';
@@ -260,8 +263,8 @@ function renderValue(key, value, q) {
   } else {
     dd.append(highlight(value, q));
   }
-  const vars = Object.fromEntries((state.env || []).map(e => [e.key, e.value]));
-  const mtd = parseMtdparts(key === 'mtdparts' ? value : (/mtdparts=\S+/.exec(value) || [''])[0], vars);
+  const mtdText = key === 'mtdparts' ? value : (/mtdparts=\S+/.exec(value) || [''])[0];
+  const mtd = mtdText && parseMtdparts(mtdText, Object.fromEntries((state.env || []).map(e => [e.key, e.value])));
   if (mtd) {
     const bar = el('div', 'mtd');
     bar.title = `Flash partitions on ${mtd.device}`;
@@ -336,7 +339,8 @@ async function useHelperIfRunning() {
   $('helperBadge').hidden = false;
   $('helperBadge').textContent = `Helper ${helper.version} connected: this page can flash directly.`;
   $('infoHint').textContent = 'Enter the root password and click Connect, then Get device info.';
-  helper.onclose = () => location.reload();
+  // Reloading mid-flash would wipe the status and log the user needs.
+  helper.onclose = () => { if (!state.flashing) location.reload(); };
   update();
 }
 

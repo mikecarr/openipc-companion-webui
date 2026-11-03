@@ -156,9 +156,9 @@ export function parseMtdparts(value, vars = {}) {
   const m = /(?:mtdparts=)?([^:\s]+):(\S+)/.exec(value || '');
   if (!m) return null;
   const parts = m[2].split(',').map(p => {
-    const pm = /^(-|[0-9]+[kKmM]?|\$\{\w+\})(?:@\S+?)?\(([^)]+)\)/.exec(p.replace(/\$\{(\w+)\}/g, (s, k) => vars[k] ?? s));
+    const pm = /^([^@(]*)(?:@\S+?)?\(([^)]+)\)/.exec(p.replace(/\$\{(\w+)\}/g, (s, k) => Object.hasOwn(vars, k) ? vars[k] : s));
     if (!pm) return null;
-    const size = pm[1] === '-' ? 'rest' : pm[1].startsWith('$') ? '?' : pm[1].toUpperCase().replace(/([KM])$/, ' $1B');
+    const size = pm[1] === '-' ? 'rest' : /^[0-9]+[kKmM]?$/.test(pm[1]) ? pm[1].toUpperCase().replace(/([KM])$/, ' $1B') : '?';
     return { size, name: pm[2] };
   }).filter(Boolean);
   return parts.length ? { device: m[1], parts } : null;

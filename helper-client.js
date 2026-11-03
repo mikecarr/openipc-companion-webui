@@ -123,19 +123,18 @@ export class FlashTracker {
   }
 }
 
-// What to tell the user when the flash command ends. A dropped connection is only good news if
-// the output shows the flash got to the end: it can also mean a power or network failure, or that
-// sysupgrade moved into RAM (newer firmware does this on purpose) with all the writing still to do.
+// What to tell the user when the flash command ends. Only the output can show the flash reached
+// the end. A dropped connection can be a power or network failure, or sysupgrade moving into RAM
+// (newer firmware does this on purpose) with all the writing still to do. Exit code 0 isn't proof
+// either: the helper can report it when no exit status arrived.
 export function flashOutcome({ disconnected, code }, tracker) {
-  const stoppedEarly = `sysupgrade stopped without writing anything (exit code ${code}). See the log above.`;
-  if (tracker.nothingWritten) return { kind: 'not-started', message: disconnected ? 'sysupgrade stopped without writing anything and the connection closed. See the log above.' : stoppedEarly };
-  if (tracker.handedOff && !tracker.complete) return { kind: 'handed-off', message: 'sysupgrade moved into the camera\'s RAM to flash, so SSH has ended as expected and progress can\'t be shown here. Keep the camera powered: it reboots by itself when it is done. Wait a few minutes, then reconnect and check the firmware version.' };
-  if (disconnected) {
-    if (tracker.complete) return { kind: 'rebooting', percent: 100, message: 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.' };
-    if (tracker.started) return { kind: 'interrupted', message: 'The connection dropped while sysupgrade was running, so the flash may not have completed. Keep the camera powered, wait a few minutes, then reconnect and check the firmware version.' };
-    return { kind: 'not-started', message: 'The connection dropped before flashing started. Nothing was written; try again.' };
-  }
-  if (code === 0) return { kind: 'rebooting', percent: 100, message: 'Done. The camera is rebooting.' };
+  const checkLater = 'Keep the camera powered, wait a few minutes, then reconnect and check the firmware version.';
+  if (tracker.complete) return { kind: 'rebooting', percent: 100, message: 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.' };
+  if (tracker.nothingWritten && tracker.percent === 0) return { kind: 'not-started', message: `sysupgrade stopped without writing anything${disconnected ? ' and the connection closed' : ` (exit code ${code})`}. See the log above.` };
+  if (tracker.handedOff && (disconnected || code === 0)) return { kind: 'handed-off', message: 'sysupgrade moved into the camera\'s RAM to flash, so SSH has ended as expected and progress can\'t be shown here. Keep the camera powered: it reboots by itself when it is done. Wait a few minutes, then reconnect and check the firmware version.' };
+  if (disconnected && !tracker.started) return { kind: 'not-started', message: `The connection dropped before the page saw flashing start, so it probably didn't. To be safe, keep the camera powered for a few minutes, then reconnect and check it before trying again.` };
+  if (disconnected) return { kind: 'interrupted', message: `The connection dropped while sysupgrade was running, so the flash may not have completed. ${checkLater}` };
+  if (code === 0) return { kind: 'interrupted', message: `sysupgrade ended without reporting that the flash finished. ${checkLater}` };
   if (tracker.started) return { kind: 'failed', message: `sysupgrade failed (exit code ${code}) and the flash may be incomplete. See the log above, and keep the camera powered until you have checked it.` };
   return { kind: 'not-started', message: `Stopped before flashing (exit code ${code}). See the log above.` };
 }
