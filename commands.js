@@ -66,9 +66,12 @@ export function flashCommand({ soc, filename }) {
     `[ "$S" = "${soc}" ] || { echo "STOP: camera SoC is $S, firmware is for ${soc}"; exit 1; };`,
     `rm -rf /tmp/fw && mkdir /tmp/fw &&`,
     `tar -xzf /tmp/${filename} -C /tmp/fw && rm -f /tmp/${filename} &&`,
-    `cd /tmp/fw && K=$(ls uImage.* | grep -v md5sum) && R=$(ls rootfs.* | grep -v md5sum) &&`,
-    `md5sum -c *.md5sum &&`,
-    `echo ${FLASH_START} && sysupgrade --force_ver -n -z --kernel=/tmp/fw/$K --rootfs=/tmp/fw/$R`,
+    // Find the images anywhere in the archive (some put them in a folder); show what's there if not.
+    `K=$(find /tmp/fw -type f -name 'uImage*' ! -name '*.md5sum' | head -n 1);`,
+    `R=$(find /tmp/fw -type f -name 'rootfs*' ! -name '*.md5sum' | head -n 1);`,
+    `{ [ -n "$K" ] && [ -n "$R" ]; } || { echo "STOP: no uImage* kernel or rootfs* image in ${filename}. It contains:"; find /tmp/fw -type f; exit 1; };`,
+    `cd "$(dirname "$R")" && md5sum -c *.md5sum &&`,
+    `echo ${FLASH_START} && sysupgrade --force_ver -n -z --kernel="$K" --rootfs="$R"`,
     ')',
   ].join(' ');
 }

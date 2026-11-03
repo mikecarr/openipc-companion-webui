@@ -31,7 +31,7 @@ test('flash command checks soc and runs sysupgrade with kernel and rootfs', () =
   assert.doesNotMatch(c, /fw_printenv -n/);
   assert.match(c, /"\$S" = "ssc338q"/);
   assert.match(c, /md5sum -c \*\.md5sum/);
-  assert.match(c, /sysupgrade --force_ver -n -z --kernel=\/tmp\/fw\/\$K --rootfs=\/tmp\/fw\/\$R/);
+  assert.match(c, /sysupgrade --force_ver -n -z --kernel="\$K" --rootfs="\$R"/);
   assert.ok(c.startsWith('(') && c.endsWith(')'));
 });
 
