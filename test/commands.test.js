@@ -57,3 +57,11 @@ test('info command prints a parseable line', async () => {
   const out = execFileSync('sh', ['-c', INFO_COMMAND], { encoding: 'utf8' });
   assert.ok(parseInfo(out));
 });
+
+import { flashPercent } from '../helper-client.js';
+
+test('flash progress lines', () => {
+  assert.equal(flashPercent('Writing kb: 4096/8192 (50%)'), 50);
+  assert.equal(flashPercent('\x1B[1mErasing block: 3/64 (4%)\x1B[0m'), 4);
+  assert.equal(flashPercent('Update rootfs from /tmp/fw/rootfs'), null);
+});

@@ -14,12 +14,27 @@ Firmware lists come from the latest releases of `OpenIPC/builder` and `OpenIPC/f
 (GitHub API, called from the browser). A local `.tgz` can be picked instead; the page unpacks it in
 the browser to check it contains a kernel, a rootfs and checksum files.
 
+## Optional helper (Flash button)
+
+`helper/` is a small Rust program that lets the page run SSH itself. It listens on
+`ws://127.0.0.1:47811`, accepts only the page at `https://mikecarr.github.io`, and understands five
+messages: `hello`, `connect`, `exec`, `upload` (legacy SCP, from a GitHub release URL or bytes the
+page sends) and `close`. It has no OpenIPC logic, so flashing changes are still commits to this
+repo. When it runs, the page shows a password field, Connect, and a Flash button with progress;
+when it doesn't, the page falls back to the copy-and-paste steps.
+
+Run from source (needs Rust): `cd helper && cargo run --release`. Add `--dev` to also accept
+pages served from localhost. Prebuilt binaries: push a tag `helper-vX.Y.Z` and the
+`Helper release` workflow attaches Mac, Windows and Linux builds to a GitHub release.
+The binaries are not code-signed yet, so macOS and Windows will warn on first run.
+
 ## Develop
 
     python3 -m http.server     # then open http://localhost:8000
     npm test                   # unit tests for the command builders (Node 22)
 
-`commands.js` holds everything that ends up on the camera; `app.js` is the page wiring.
+`commands.js` holds everything that ends up on the camera; `app.js` is the page wiring;
+`helper-client.js` talks to the helper. Helper tests: `cd helper && cargo test`.
 
 ## Deploy
 

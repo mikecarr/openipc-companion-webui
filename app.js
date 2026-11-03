@@ -1,7 +1,8 @@
+import { HelperClient, flashPercent } from './helper-client.js';
 import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo } from './commands.js';
 
 const $ = id => document.getElementById(id);
-const state = { assets: [], filename: '', fromLocal: false };
+const state = { assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
 const releaseCache = new Map();
 
 function remember() {
@@ -44,7 +45,7 @@ function renderAssets(tag) {
     pick.textContent = a.name;
     pick.title = `${(a.size / 1048576).toFixed(1)} MB`;
     pick.onclick = () => {
-      state.filename = a.name; state.fromLocal = false;
+      state.filename = a.name; state.fromLocal = false; state.url = a.url; state.file = null;
       if (!$('soc').value.trim()) $('soc').value = socFromFilename(a.name);
       renderAssets(tag); update();
     };
@@ -57,7 +58,7 @@ function renderAssets(tag) {
 
 async function onLocalFile(file) {
   if (!file) return;
-  state.filename = file.name; state.fromLocal = true;
+  state.filename = file.name; state.fromLocal = true; state.file = file; state.url = null;
   try {
     const tar = new Uint8Array(await new Response(file.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
     const names = tarNames(tar);
@@ -83,6 +84,7 @@ function update() {
   const v = { ip: $('ip').value.trim(), port: $('port').value.trim() || '22', soc: $('soc').value.trim(), filename: state.filename };
   const errors = validate(v);
   const link = $('sshLink');
+  $('flashBtn').disabled = !!errors.length || !state.connected || state.flashing;
   if (errors.length) {
     $('scpCmd').textContent = $('flashCmd').textContent = errors.join('\n');
     link.setAttribute('aria-disabled', 'true'); link.href = '#';
@@ -119,6 +121,15 @@ function applyInfo(text) {
 }
 
 $('getInfo').addEventListener('click', async () => {
+  if (state.helper) {
+    try {
+      if (!state.connected) await connectCamera();
+      $('infoHint').textContent = 'Reading device info…';
+      const r = await state.helper.execText(INFO_COMMAND);
+      applyInfo(r.out);
+    } catch (e) { $('infoHint').textContent = `Could not read device info: ${e.message}`; }
+    return;
+  }
   try { await navigator.clipboard.writeText(INFO_COMMAND); } catch {}
   const ip = $('ip').value.trim();
   if (ip && !validate({ ip, port: $('port').value || 22, soc: 'x', filename: 'x.tgz' }).length) {
@@ -135,6 +146,102 @@ $('pasteInfo').addEventListener('click', async () => {
 });
 $('infoText').addEventListener('input', e => applyInfo(e.target.value));
 
+// ---- Optional local helper: Connect, device info and Flash without copy and paste ----
+
+async function connectCamera() {
+  const ip = $('ip').value.trim(), port = $('port').value.trim() || '22';
+  if (validate({ ip, port, soc: 'x', filename: 'x.tgz' }).length) throw new Error('enter the camera IP address first');
+  $('connectBtn').disabled = true;
+  $('infoHint').textContent = `Connecting to ${ip}…`;
+  try {
+    await state.helper.connect({ host: ip, port, password: $('password').value });
+    state.connected = true;
+    $('connectBtn').textContent = 'Connected';
+    $('infoHint').textContent = `Connected to ${ip}.`;
+  } catch (e) {
+    state.connected = false;
+    $('connectBtn').textContent = 'Connect';
+    $('infoHint').textContent = `Could not connect: ${e.message}`;
+    throw e;
+  } finally {
+    $('connectBtn').disabled = false;
+    update();
+  }
+}
+
+function log(text) {
+  const el = $('flashLog');
+  el.hidden = false;
+  el.textContent += text;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function flash() {
+  const v = { ip: $('ip').value.trim(), port: $('port').value.trim() || '22', soc: $('soc').value.trim(), filename: state.filename };
+  if (validate(v).length || !state.connected) return;
+  if (!confirm(`Flash ${v.filename} to ${v.ip}? The camera will reboot.`)) return;
+  state.flashing = true; update();
+  const bar = $('flashProgress'), status = $('flashStatus');
+  bar.hidden = false; bar.value = 0; $('flashLog').textContent = '';
+  let started = false;
+  try {
+    status.textContent = 'Uploading firmware…';
+    await state.helper.upload(`/tmp/${v.filename}`, state.file ? { file: state.file } : { url: state.url }, (sent, total, text) => {
+      if (text) { status.textContent = 'Downloading firmware from GitHub…'; return; }
+      bar.value = total ? Math.round((sent / total) * 30) : 0;
+      status.textContent = `Uploading firmware… ${total ? Math.round((sent / total) * 100) : 0}%`;
+    });
+    status.textContent = 'Checking and flashing. Do not unplug the camera.';
+    let buffer = '';
+    const r = await state.helper.exec(flashCommand(v), text => {
+      log(text);
+      if (text.includes('sysupgrade') || /Update (kernel|rootfs)/i.test(text)) started = true;
+      buffer += text;
+      const lines = buffer.split(/\r|\n/); buffer = lines.pop();
+      for (const line of [...lines, buffer]) {
+        const pct = flashPercent(line);
+        if (pct !== null) { started = true; bar.value = 30 + Math.round(pct * 0.7); }
+      }
+    });
+    if (r.disconnected) {
+      state.connected = false;
+      if (started) { bar.value = 100; status.textContent = 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.'; }
+      else status.textContent = 'The connection dropped before flashing started. Nothing was written; try again.';
+    } else if (r.code === 0) {
+      bar.value = 100; status.textContent = 'Done. The camera is rebooting.';
+    } else {
+      status.textContent = `Stopped before flashing (exit code ${r.code}). See the log above.`;
+    }
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    state.flashing = false;
+    $('connectBtn').textContent = state.connected ? 'Connected' : 'Connect';
+    update();
+  }
+}
+
+async function useHelperIfRunning() {
+  const helper = await HelperClient.detect();
+  if (!helper) return;
+  state.helper = helper;
+  document.body.classList.add('helper');
+  document.querySelectorAll('.helperOnly').forEach(el => (el.hidden = false));
+  $('pasteInfo').hidden = true;
+  $('helperBadge').hidden = false;
+  $('helperBadge').textContent = `Helper ${helper.version} connected: this page can flash directly.`;
+  $('infoHint').textContent = 'Enter the root password and click Connect, then Get device info.';
+  helper.onclose = () => location.reload();
+  update();
+}
+
+$('connectBtn').addEventListener('click', () => connectCamera().catch(() => {}));
+$('flashBtn').addEventListener('click', flash);
+$('password').addEventListener('keydown', e => e.key === 'Enter' && connectCamera().catch(() => {}));
+['ip', 'port', 'password'].forEach(id => $(id).addEventListener('input', () => {
+  if (state.connected && id !== 'password') { state.connected = false; $('connectBtn').textContent = 'Connect'; }
+}));
+
 restore();
 ['ip', 'port'].forEach(id => $(id).addEventListener('input', update));
 $('soc').addEventListener('input', () => { renderAssets(releaseCache.get($('source').value)?.tag); update(); });
@@ -143,3 +250,4 @@ $('source').addEventListener('change', () => { remember(); loadReleases(); });
 $('localFile').addEventListener('change', e => onLocalFile(e.target.files[0]));
 update();
 loadReleases();
+useHelperIfRunning();

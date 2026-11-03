@@ -10,9 +10,11 @@
 <main>
   <header>
     <h1>OpenIPC Firmware Flasher</h1>
-    <p class="lead">Pick firmware, upload it with <code>scp</code>, flash it from
+    <p class="lead noHelper">Pick firmware, upload it with <code>scp</code>, flash it from
       <a href="https://chromewebstore.google.com/search/secure%20shell" target="_blank" rel="noopener">Secure Shell</a>.
       This page never connects to your camera; it only builds the commands.</p>
+    <p class="lead helperOnly" hidden>Pick firmware and flash it. The local helper on this computer does the SSH; this page decides what runs.</p>
+    <p id="helperBadge" class="badge" hidden></p>
   </header>
 
   <section class="card">
@@ -21,8 +23,10 @@
       <label>IP address <input id="ip" placeholder="192.168.1.10" autocomplete="off"></label>
       <label>SSH port <input id="port" value="22" inputmode="numeric"></label>
       <label>SoC <input id="soc" placeholder="ssc338q" autocomplete="off"></label>
+      <label class="helperOnly" hidden>Root password <input id="password" type="password" autocomplete="off"></label>
     </div>
     <div class="info">
+      <button id="connectBtn" type="button" class="helperOnly" hidden>Connect</button>
       <button id="getInfo" type="button">Get device info</button>
       <button id="pasteInfo" type="button" class="secondary">Paste result</button>
     </div>
@@ -51,14 +55,24 @@
     </details>
   </section>
 
-  <section class="card">
+  <section class="card helperOnly" hidden>
+    <h2><span class="n">3</span> Flash</h2>
+    <p>The helper uploads the firmware and runs the same checks and <code>sysupgrade</code> as the manual steps below.</p>
+    <button id="flashBtn" type="button" disabled>Flash now</button>
+    <progress id="flashProgress" max="100" value="0" hidden></progress>
+    <p id="flashStatus" class="hint"></p>
+    <pre id="flashLog" class="log" hidden></pre>
+    <p class="warn">Do not unplug the camera while it flashes. It reboots by itself when done.</p>
+  </section>
+
+  <section class="card manual">
     <h2><span class="n">3</span> Upload</h2>
     <p>Download the firmware, then run this in your computer's terminal
       (Terminal on macOS, PowerShell on Windows). It assumes the file is in your Downloads folder. <code>-O</code> is required: the camera has no SFTP server.</p>
     <div class="cmd"><pre id="scpCmd">Pick a camera and firmware first.</pre><button data-copy="scpCmd">Copy</button></div>
   </section>
 
-  <section class="card">
+  <section class="card manual">
     <h2><span class="n">4</span> Flash</h2>
     <p><a id="sshLink" class="button" href="#" aria-disabled="true">Open Secure Shell</a>
       and paste this line. It checks the SoC and checksums before writing anything.</p>
@@ -67,6 +81,8 @@
   </section>
 
   <footer>
+    <p class="noHelper">Want a Flash button instead of copy and paste? Run the optional
+      <a href="https://github.com/mikecarr/openipc-companion-webui/releases">openipc-helper</a> and reload.</p>
     <p>Source on <a href="https://github.com/mikecarr/openipc-companion-webui">GitHub</a>. Same flash sequence as OpenIPC Companion.</p>
   </footer>
 </main>

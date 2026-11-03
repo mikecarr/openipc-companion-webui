@@ -1,0 +1,19 @@
+[package]
+name = "openipc-helper"
+version = "0.1.0"
+edition = "2021"
+description = "Local SSH bridge for the OpenIPC web flasher. Listens on 127.0.0.1 and only answers the flasher page."
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
+tungstenite = "0.24"
+ureq = "2"
+base64 = "0.22"
+
+[profile.release]
+strip = true
+lto = true
