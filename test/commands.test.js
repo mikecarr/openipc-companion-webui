@@ -309,3 +309,37 @@ test('mtdparts keeps a partition whose variable holds an unusual size', () => {
     { size: '?', name: 'x' }, { size: '?', name: 'y' }, { size: '?', name: 'z' },
   ]);
 });
+
+test('flash command stops before the checksum step when the archive has no kernel or rootfs', () => {
+  const c = flashCommand({ soc: 'ssc338q', filename: 'f.tgz' });
+  assert.ok(c.indexOf('STOP: no uImage') > 0 && c.indexOf('STOP: no uImage') < c.indexOf('md5sum -c'));
+});
+
+import { TerminalLog } from '../helper-client.js';
+
+const shown = (...chunks) => { const l = new TerminalLog(); chunks.forEach(c => l.feed(c)); return l.text; };
+
+test('log: a carriage return makes the next text replace the line', () => {
+  assert.equal(shown('Writing kb: 1/2 (50%)\rWriting kb: 2/2 (100%)\nDone\n'), 'Writing kb: 2/2 (100%)\nDone\n');
+});
+
+test('log: text printed after a progress line stays on that line', () => {
+  assert.equal(shown('\rErasing @ 1 - 0% complete. Cleanmarker at 1.\rErasing @ 2 - 50% complete. Cleanmarker at 2.\nUnconditional reboot\n'),
+    'Erasing @ 2 - 50% complete. Cleanmarker at 2.\nUnconditional reboot\n');
+});
+
+test('log: a progress line is kept when the next output starts a new line', () => {
+  assert.equal(shown('Verifying kb: 9/9 (100%)\r\nKernel updated\n'), 'Verifying kb: 9/9 (100%)\nKernel updated\n');
+});
+
+test('log: a carriage return at the end of a chunk still applies', () => {
+  assert.equal(shown('Writing kb: 1/2 (50%)\r', 'Writing kb: 2/2 (100%)'), 'Writing kb: 2/2 (100%)');
+});
+
+test('log: colour codes are removed, even when split across chunks', () => {
+  assert.equal(shown('\x1B[1;33mOverlay', 'FS\x1B[', '0m\n'), 'OverlayFS\n');
+});
+
+test('log: a pending carriage return does not hide the line before more output', () => {
+  assert.equal(shown('Writing kb: 1/2 (50%)\r'), 'Writing kb: 1/2 (50%)');
+});
