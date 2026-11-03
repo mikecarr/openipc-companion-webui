@@ -1,4 +1,4 @@
-import { HelperClient, FlashTracker, flashOutcome } from './helper-client.js';
+import { HelperClient, FlashTracker, TerminalLog, flashOutcome } from './helper-client.js';
 import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
@@ -142,6 +142,7 @@ $('getInfo').addEventListener('click', async () => {
       $('infoHint').textContent = 'Reading device info…';
       const r = await state.helper.execText(INFO_COMMAND);
       applyInfo(r.out);
+      await loadEnv(); // The info line can miss the flash type; without it NAND images get listed.
     } catch (e) { $('infoHint').textContent = `Could not read device info: ${e.message}`; }
     return;
   }
@@ -187,10 +188,10 @@ async function connectCamera() {
   }
 }
 
-function log(text) {
+function showLog(text) {
   const el = $('flashLog');
   el.hidden = false;
-  el.textContent += text;
+  el.textContent = text;
   el.scrollTop = el.scrollHeight;
 }
 
@@ -201,6 +202,7 @@ async function flash() {
   state.flashing = true; update();
   const bar = $('flashProgress'), status = $('flashStatus');
   bar.hidden = false; bar.value = 0; $('flashLog').textContent = '';
+  const output = new TerminalLog();
   const tracker = new FlashTracker();
   try {
     status.textContent = 'Uploading firmware…';
@@ -211,7 +213,8 @@ async function flash() {
     });
     status.textContent = 'Checking and flashing. Do not unplug the camera.';
     const r = await state.helper.exec(flashCommand(v), text => {
-      log(text);
+      output.feed(text);
+      showLog(output.text);
       tracker.feed(text);
       bar.value = 30 + Math.round(tracker.percent * 0.7);
     });
