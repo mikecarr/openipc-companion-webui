@@ -52,5 +52,6 @@ if the output reached the end of the flash.
 
 - Companion's fallback for cameras whose kernel can't mount the new rootfs (`flashcp` per partition).
 - Bootloader replacement and MTD backup/restore.
-- Assumes `tar -z` and `md5sum -c` in the camera's BusyBox, and enough RAM in `/tmp` for the
+- NAND cameras: their images carry only a rootfs (`rootfs.ubi`), and the flash command stops on them.
+- Assumes `gzip`, `tar` and `md5sum -c` in the camera's BusyBox, and enough RAM in `/tmp` for the
   archive plus its unpacked files (the archive is deleted right after unpacking).

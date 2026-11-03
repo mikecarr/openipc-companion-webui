@@ -138,3 +138,26 @@ export function flashOutcome({ disconnected, code }, tracker) {
   if (tracker.started) return { kind: 'failed', message: `sysupgrade failed (exit code ${code}) and the flash may be incomplete. See the log above, and keep the camera powered until you have checked it.` };
   return { kind: 'not-started', message: `Stopped before flashing (exit code ${code}). See the log above.` };
 }
+
+// Output as a terminal would show it: "\r" rewrites the current line, so a progress bar stays on
+// one line instead of piling up, and colour codes are dropped.
+export class TerminalLog {
+  #lines = [];
+  #line = '';
+  #returned = false;
+
+  feed(text) {
+    for (const ch of text) {
+      if (ch === '\n') { this.#lines.push(this.#line); this.#line = ''; this.#returned = false; }
+      else if (ch === '\r') this.#returned = true;
+      else {
+        if (this.#returned) { this.#line = ''; this.#returned = false; }
+        this.#line += ch;
+      }
+    }
+  }
+
+  get text() {
+    return [...this.#lines, this.#line].join('\n').replace(/\x1B(\[[0-9;]*[A-Za-z]?)?/g, '');
+  }
+}
