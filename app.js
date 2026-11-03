@@ -129,7 +129,7 @@ function applyInfo(text) {
     const dd = document.createElement('dd'); dd.textContent = info[k];
     return [dt, dd];
   }));
-  $('infoOut').hidden = false; $('infoText').hidden = true;
+  $('infoOut').hidden = false; $('infoText').hidden = true; $('devicePlaceholder').hidden = true;
   $('infoHint').textContent = 'Device info loaded. The firmware list below now shows only files for this SoC, sensor and flash type.';
   renderAssets(releaseCache.get($('source').value)?.tag); update();
   return true;

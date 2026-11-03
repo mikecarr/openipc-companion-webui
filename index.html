@@ -17,6 +17,8 @@
     <p id="helperBadge" class="badge" hidden></p>
   </header>
 
+  <div class="layout">
+    <div class="paneLeft">
   <section class="card">
     <h2><span class="n">1</span> Camera</h2>
     <div class="grid">
@@ -33,19 +35,6 @@
     <p id="infoHint" class="hint">Fills in the SoC for you. "Get device info" copies a command and opens Secure Shell:
       paste it there, select the line it prints (starting with <code>OPENIPC-INFO</code>), then click "Paste result".</p>
     <textarea id="infoText" rows="2" placeholder="Or paste the OPENIPC-INFO line here" hidden></textarea>
-    <dl id="infoOut" class="infoOut" hidden></dl>
-  </section>
-
-  <section class="card" id="envCard" hidden>
-    <div class="envHead">
-      <h2>Device details <span class="hint small">from fw_printenv</span></h2>
-      <div class="envTools">
-        <input id="envFilter" placeholder="Search keys or values" autocomplete="off">
-        <button id="envCopy" type="button" class="secondary">Copy all</button>
-        <button id="envRefresh" type="button" class="secondary">Refresh</button>
-      </div>
-    </div>
-    <div id="envGroups"></div>
   </section>
 
   <section class="card">
@@ -91,6 +80,27 @@
     <div class="cmd"><pre id="flashCmd">Pick a camera and firmware first.</pre><button data-copy="flashCmd">Copy</button></div>
     <p class="warn">Do not unplug the camera while it flashes. It reboots by itself when done; the Secure Shell session will drop.</p>
   </section>
+    </div>
+    <aside class="paneRight">
+  <section class="card" id="deviceCard">
+    <h2>Device</h2>
+    <p id="devicePlaceholder" class="hint">Connect to a camera to see its SoC, sensor, flash and full U-Boot environment here.</p>
+    <dl id="infoOut" class="infoOut" hidden></dl>
+  </section>
+
+  <section class="card" id="envCard" hidden>
+    <div class="envHead">
+      <h2>Device details <span class="hint small">from fw_printenv</span></h2>
+      <div class="envTools">
+        <input id="envFilter" placeholder="Search keys or values" autocomplete="off">
+        <button id="envCopy" type="button" class="secondary">Copy all</button>
+        <button id="envRefresh" type="button" class="secondary">Refresh</button>
+      </div>
+    </div>
+    <div id="envGroups"></div>
+  </section>
+    </aside>
+  </div>
 
   <footer>
     <p class="noHelper">Want a Flash button instead of copy and paste? Run the optional
