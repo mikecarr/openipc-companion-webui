@@ -59,7 +59,7 @@ function hostForScp(ip) {
 export function flashCommand({ soc, filename }) {
   return [
     '(',
-    `S=$(fw_printenv -n soc);`,
+    `S=$(fw_printenv soc 2>/dev/null | sed 's/^[^=]*=//');`,
     `[ "$S" = "${soc}" ] || { echo "STOP: camera SoC is $S, firmware is for ${soc}"; exit 1; };`,
     `rm -rf /tmp/fw && mkdir /tmp/fw &&`,
     `tar -xzf /tmp/${filename} -C /tmp/fw && rm -f /tmp/${filename} &&`,
@@ -96,7 +96,7 @@ export function tarNames(bytes) {
 // Device info: one line the user runs in Secure Shell. The output is a single
 // "OPENIPC-INFO key=value;..." line the page can parse back from the clipboard.
 export const INFO_COMMAND =
-  `echo "OPENIPC-INFO soc=$(fw_printenv -n soc 2>/dev/null);sensor=$(fw_printenv -n sensor 2>/dev/null);` +
+  `echo "OPENIPC-INFO soc=$(fw_printenv soc 2>/dev/null | sed 's/^[^=]*=//');sensor=$(fw_printenv sensor 2>/dev/null | sed 's/^[^=]*=//');` +
   `flash=$(cat /sys/class/mtd/mtd0/type 2>/dev/null || grep -o 'mtdparts=[^:]*' /proc/cmdline | cut -d= -f2);host=$(hostname -s);` +
   `ver=$(sed -n 's/^OPENIPC_VERSION=//p' /etc/os-release | tr -d '\\"')"`;
 

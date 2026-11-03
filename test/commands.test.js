@@ -27,7 +27,8 @@ test('scp uses legacy protocol and port flag', () => {
 
 test('flash command checks soc and runs sysupgrade with kernel and rootfs', () => {
   const c = flashCommand({ soc: 'ssc338q', filename: 'f.tgz' });
-  assert.match(c, /fw_printenv -n soc/);
+  assert.match(c, /fw_printenv soc 2>\/dev\/null \| sed/);
+  assert.doesNotMatch(c, /fw_printenv -n/);
   assert.match(c, /"\$S" = "ssc338q"/);
   assert.match(c, /md5sum -c \*\.md5sum/);
   assert.match(c, /sysupgrade --force_ver -n -z --kernel=\/tmp\/fw\/\$K --rootfs=\/tmp\/fw\/\$R/);
