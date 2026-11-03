@@ -53,6 +53,9 @@ function hostForScp(ip) {
   return ip.includes(':') && !ip.startsWith('[') ? `[${ip}]` : ip;
 }
 
+// Printed right before sysupgrade, so the page knows the checks passed and writing may begin.
+export const FLASH_START = 'OPENIPC-FLASH-START';
+
 // Flash, pasted into Secure Shell on the camera. Mirrors Companion's SysUpgradeService:
 // check SoC, unpack, verify checksums, then sysupgrade --kernel --rootfs.
 // Runs in a subshell so a failed check stops the chain without closing the SSH session.
@@ -65,7 +68,7 @@ export function flashCommand({ soc, filename }) {
     `tar -xzf /tmp/${filename} -C /tmp/fw && rm -f /tmp/${filename} &&`,
     `cd /tmp/fw && K=$(ls uImage.* | grep -v md5sum) && R=$(ls rootfs.* | grep -v md5sum) &&`,
     `md5sum -c *.md5sum &&`,
-    `sysupgrade --force_ver -n -z --kernel=/tmp/fw/$K --rootfs=/tmp/fw/$R`,
+    `echo ${FLASH_START} && sysupgrade --force_ver -n -z --kernel=/tmp/fw/$K --rootfs=/tmp/fw/$R`,
     ')',
   ].join(' ');
 }
@@ -96,7 +99,7 @@ export function tarNames(bytes) {
 // Device info: one line the user runs in Secure Shell. The output is a single
 // "OPENIPC-INFO key=value;..." line the page can parse back from the clipboard.
 export const INFO_COMMAND =
-  `echo "OPENIPC-INFO soc=$(fw_printenv soc 2>/dev/null | sed 's/^[^=]*=//');sensor=$(fw_printenv sensor 2>/dev/null | sed 's/^[^=]*=//');` +
+  `echo "OPENIPC-INFO soc=$(fw_printenv soc 2>/dev/null | sed 's/^[^=]*=//');sensor=$(fw_printenv sensor 2>/dev/null | sed 's/^[^=]*=//' | grep . || lsmod 2>/dev/null | sed -n 's/^sensor_\\([a-z0-9]*\\).*/\\1/p' | head -1);` +
   `flash=$(cat /sys/class/mtd/mtd0/type 2>/dev/null || grep -o 'mtdparts=[^:]*' /proc/cmdline | cut -d= -f2);host=$(hostname -s);` +
   `ver=$(sed -n 's/^OPENIPC_VERSION=//p' /etc/os-release | tr -d '\\"')"`;
 
@@ -148,12 +151,15 @@ export function groupEnv(entries) {
 }
 
 // "mtdparts=NOR_FLASH:256k(boot),64k(env),2048k(kernel),-(rootfs_data)" -> device + partitions.
-export function parseMtdparts(value) {
+// Sizes may be U-Boot variables, as in "${rootmtd}(rootfs)": `vars` resolves them from the environment.
+export function parseMtdparts(value, vars = {}) {
   const m = /(?:mtdparts=)?([^:\s]+):(\S+)/.exec(value || '');
   if (!m) return null;
   const parts = m[2].split(',').map(p => {
-    const pm = /^(-|[0-9]+[kKmM]?)(?:@\S+?)?\(([^)]+)\)/.exec(p);
-    return pm ? { size: pm[1] === '-' ? 'rest' : pm[1].toUpperCase().replace(/([KM])$/, ' $1B'), name: pm[2] } : null;
+    const pm = /^(-|[0-9]+[kKmM]?|\$\{\w+\})(?:@\S+?)?\(([^)]+)\)/.exec(p.replace(/\$\{(\w+)\}/g, (s, k) => vars[k] ?? s));
+    if (!pm) return null;
+    const size = pm[1] === '-' ? 'rest' : pm[1].startsWith('$') ? '?' : pm[1].toUpperCase().replace(/([KM])$/, ' $1B');
+    return { size, name: pm[2] };
   }).filter(Boolean);
   return parts.length ? { device: m[1], parts } : null;
 }

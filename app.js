@@ -1,4 +1,4 @@
-import { HelperClient, flashPercent } from './helper-client.js';
+import { HelperClient, FlashTracker, flashOutcome } from './helper-client.js';
 import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, infoFromEnv, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
@@ -197,11 +197,10 @@ function log(text) {
 async function flash() {
   const v = { ip: $('ip').value.trim(), port: $('port').value.trim() || '22', soc: $('soc').value.trim(), filename: state.filename };
   if (validate(v).length || !state.connected) return;
-  if (!confirm(`Flash ${v.filename} to ${v.ip}? The camera will reboot.`)) return;
+  if (!confirm(`Flash ${v.filename} to ${v.ip}? Settings saved on the camera are erased, and it will reboot.`)) return;
   state.flashing = true; update();
   const bar = $('flashProgress'), status = $('flashStatus');
   bar.hidden = false; bar.value = 0; $('flashLog').textContent = '';
-  let started = false;
   try {
     status.textContent = 'Uploading firmware…';
     await state.helper.upload(`/tmp/${v.filename}`, state.file ? { file: state.file } : { url: state.url }, (sent, total, text) => {
@@ -210,26 +209,16 @@ async function flash() {
       status.textContent = `Uploading firmware… ${total ? Math.round((sent / total) * 100) : 0}%`;
     });
     status.textContent = 'Checking and flashing. Do not unplug the camera.';
-    let buffer = '';
+    const tracker = new FlashTracker();
     const r = await state.helper.exec(flashCommand(v), text => {
       log(text);
-      if (text.includes('sysupgrade') || /Update (kernel|rootfs)/i.test(text)) started = true;
-      buffer += text;
-      const lines = buffer.split(/\r|\n/); buffer = lines.pop();
-      for (const line of [...lines, buffer]) {
-        const pct = flashPercent(line);
-        if (pct !== null) { started = true; bar.value = 30 + Math.round(pct * 0.7); }
-      }
+      tracker.feed(text);
+      bar.value = 30 + Math.round(tracker.percent * 0.7);
     });
-    if (r.disconnected) {
-      state.connected = false;
-      if (started) { bar.value = 100; status.textContent = 'Flash finished; the camera is rebooting. Give it a minute, then reconnect.'; }
-      else status.textContent = 'The connection dropped before flashing started. Nothing was written; try again.';
-    } else if (r.code === 0) {
-      bar.value = 100; status.textContent = 'Done. The camera is rebooting.';
-    } else {
-      status.textContent = `Stopped before flashing (exit code ${r.code}). See the log above.`;
-    }
+    if (r.disconnected) state.connected = false;
+    const outcome = flashOutcome(r, tracker);
+    if (outcome.percent) bar.value = outcome.percent;
+    status.textContent = outcome.message;
   } catch (e) {
     status.textContent = `Failed: ${e.message}`;
   } finally {
@@ -271,7 +260,8 @@ function renderValue(key, value, q) {
   } else {
     dd.append(highlight(value, q));
   }
-  const mtd = parseMtdparts(key === 'mtdparts' ? value : (/mtdparts=\S+/.exec(value) || [''])[0]);
+  const vars = Object.fromEntries((state.env || []).map(e => [e.key, e.value]));
+  const mtd = parseMtdparts(key === 'mtdparts' ? value : (/mtdparts=\S+/.exec(value) || [''])[0], vars);
   if (mtd) {
     const bar = el('div', 'mtd');
     bar.title = `Flash partitions on ${mtd.device}`;
@@ -308,7 +298,7 @@ async function loadEnv() {
     const r = await state.helper.execText('fw_printenv 2>&1');
     state.env = parseEnv(r.out);
     renderEnv();
-    // The one-line info can miss values (older fw_printenv without -n); fill them from the full env.
+    // The one-line info can miss values; fill them from the full env.
     const merged = infoFromEnv(state.device, state.env);
     if (JSON.stringify(merged) !== JSON.stringify(state.device || {})) {
       state.device = merged;
