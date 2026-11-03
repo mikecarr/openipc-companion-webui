@@ -111,3 +111,46 @@ export function parseInfo(text) {
   if (info.flash) info.flash = /nand/i.test(info.flash) ? 'nand' : 'nor';
   return info;
 }
+
+// ---- fw_printenv (U-Boot environment) ----
+
+// "key=value" per line; values may themselves contain "=".
+export function parseEnv(text) {
+  const out = [];
+  for (const line of (text || '').split(/\r?\n/)) {
+    const i = line.indexOf('=');
+    if (i > 0 && /^[A-Za-z0-9_.\-]+$/.test(line.slice(0, i))) out.push({ key: line.slice(0, i), value: line.slice(i + 1) });
+  }
+  return out;
+}
+
+const ENV_GROUPS = [
+  ['Hardware', ['soc', 'sensor', 'wlandev', 'wlanssid', 'totalmem', 'osmem', 'rmem', 'mmz', 'hwid', 'board', 'vendor']],
+  ['Network', ['ipaddr', 'serverip', 'netmask', 'gatewayip', 'ethaddr', 'ethact', 'phyaddru', 'phyaddrd', 'dnsip']],
+  ['Boot', ['bootcmd', 'bootargs', 'bootdelay', 'baudrate', 'mtdparts', 'mtdids', 'kernaddr', 'rootaddr', 'upgrade', 'setnor8m', 'setnor16m', 'setnand', 'uknor8m', 'uknor16m', 'urnor8m', 'urnor16m', 'uknand', 'urnand', 'stdin', 'stdout', 'stderr', 'verify', 'bootfile']],
+];
+
+// Known keys into Hardware / Network / Boot in a fixed order; everything else under Other, sorted.
+export function groupEnv(entries) {
+  const byKey = new Map(entries.map(e => [e.key, e]));
+  const used = new Set();
+  const groups = [];
+  for (const [name, keys] of ENV_GROUPS) {
+    const items = keys.filter(k => byKey.has(k)).map(k => (used.add(k), byKey.get(k)));
+    if (items.length) groups.push({ name, items });
+  }
+  const rest = entries.filter(e => !used.has(e.key)).sort((a, b) => a.key.localeCompare(b.key));
+  if (rest.length) groups.push({ name: 'Other', items: rest });
+  return groups;
+}
+
+// "mtdparts=NOR_FLASH:256k(boot),64k(env),2048k(kernel),-(rootfs_data)" -> device + partitions.
+export function parseMtdparts(value) {
+  const m = /(?:mtdparts=)?([^:\s]+):(\S+)/.exec(value || '');
+  if (!m) return null;
+  const parts = m[2].split(',').map(p => {
+    const pm = /^(-|[0-9]+[kKmM]?)(?:@\S+?)?\(([^)]+)\)/.exec(p);
+    return pm ? { size: pm[1] === '-' ? 'rest' : pm[1].toUpperCase().replace(/([KM])$/, ' $1B'), name: pm[2] } : null;
+  }).filter(Boolean);
+  return parts.length ? { device: m[1], parts } : null;
+}

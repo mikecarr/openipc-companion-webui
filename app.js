@@ -1,5 +1,5 @@
 import { HelperClient, flashPercent } from './helper-client.js';
-import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo } from './commands.js';
+import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo, parseEnv, groupEnv, parseMtdparts } from './commands.js';
 
 const $ = id => document.getElementById(id);
 const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
@@ -164,6 +164,7 @@ async function connectCamera() {
     $('infoHint').textContent = `Connected to ${ip}. Reading device info…`;
     try { applyInfo((await state.helper.execText(INFO_COMMAND)).out); }
     catch (e) { $('infoHint').textContent = `Connected, but could not read device info: ${e.message}`; }
+    await loadEnv();
   } catch (e) {
     state.connected = false;
     $('connectBtn').textContent = 'Connect';
@@ -226,6 +227,89 @@ async function flash() {
     update();
   }
 }
+
+// ---- Device details: the full U-Boot environment, grouped and formatted ----
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function highlight(text, q) {
+  const span = el('span');
+  if (!q) { span.textContent = text; return span; }
+  const lower = text.toLowerCase(); let i = 0, j;
+  while ((j = lower.indexOf(q, i)) !== -1) {
+    span.append(text.slice(i, j), el('mark', '', text.slice(j, j + q.length)));
+    i = j + q.length;
+  }
+  span.append(text.slice(i));
+  return span;
+}
+
+function renderValue(key, value, q) {
+  const dd = el('dd');
+  // bootargs: one chip per kernel argument; long command lists (bootcmd etc.): one chip per command.
+  const parts = key === 'bootargs' ? value.split(/\s+/) : value.length > 40 && value.includes(';') ? value.split(/;\s*/) : null;
+  if (parts) {
+    const tokens = el('div', 'tokens');
+    for (const t of parts.filter(Boolean)) { const tok = el('span', 'token'); tok.append(highlight(t, q)); tokens.append(tok); }
+    dd.append(tokens);
+  } else {
+    dd.append(highlight(value, q));
+  }
+  const mtd = parseMtdparts(key === 'mtdparts' ? value : (/mtdparts=\S+/.exec(value) || [''])[0]);
+  if (mtd) {
+    const bar = el('div', 'mtd');
+    bar.title = `Flash partitions on ${mtd.device}`;
+    for (const p of mtd.parts) { const s = el('span'); s.append(el('b', '', p.name), p.size); bar.append(s); }
+    dd.append(bar);
+  }
+  return dd;
+}
+
+function renderEnv() {
+  const q = $('envFilter').value.trim().toLowerCase();
+  const entries = (state.env || []).filter(e => !q || e.key.toLowerCase().includes(q) || e.value.toLowerCase().includes(q));
+  const groups = groupEnv(entries);
+  $('envGroups').replaceChildren(...(groups.length ? groups.map(g => {
+    const sec = el('div', 'envGroup');
+    sec.append(el('h3', '', `${g.name} (${g.items.length})`));
+    const dl = el('dl');
+    for (const { key, value } of g.items) {
+      const row = el('div', 'envRow');
+      const dt = el('dt'); dt.append(highlight(key, q));
+      row.append(dt, renderValue(key, value, q));
+      dl.append(row);
+    }
+    sec.append(dl);
+    return sec;
+  }) : [el('p', 'hint', q ? 'No matches.' : 'No environment variables returned.')]));
+}
+
+async function loadEnv() {
+  if (!state.helper || !state.connected) return;
+  $('envCard').hidden = false;
+  $('envGroups').replaceChildren(el('p', 'hint', 'Reading fw_printenv…'));
+  try {
+    const r = await state.helper.execText('fw_printenv 2>&1');
+    state.env = parseEnv(r.out);
+    renderEnv();
+  } catch (e) {
+    $('envGroups').replaceChildren(el('p', 'hint', `Could not read fw_printenv: ${e.message}`));
+  }
+}
+
+$('envFilter').addEventListener('input', renderEnv);
+$('envRefresh').addEventListener('click', loadEnv);
+$('envCopy').addEventListener('click', async e => {
+  try {
+    await navigator.clipboard.writeText((state.env || []).map(x => `${x.key}=${x.value}`).join('\n'));
+    e.target.textContent = 'Copied'; setTimeout(() => (e.target.textContent = 'Copy all'), 1500);
+  } catch {}
+});
 
 async function useHelperIfRunning() {
   const helper = await HelperClient.detect();

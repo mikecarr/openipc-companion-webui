@@ -75,3 +75,21 @@ test('filter by device flash type', () => {
   const a = ['ssc338q_fpv_a-b-nor.tgz', 'ssc338q_fpv_a-b-nand.tgz', 'ssc338q_rubyfpv.tgz', 'ssc30kq_fpv_a-b-nor.tgz'].map(name => ({ name }));
   assert.deepEqual(filterAssets(a, { soc: 'ssc338q', flash: 'nor' }).map(x => x.name), ['ssc338q_fpv_a-b-nor.tgz', 'ssc338q_rubyfpv.tgz']);
 });
+
+import { parseEnv, groupEnv, parseMtdparts } from '../commands.js';
+
+test('fw_printenv parsing and grouping', () => {
+  const env = parseEnv('soc=ssc338q\nbootargs=console=ttyS0,115200 mem=64M\nipaddr=192.168.1.10\nzzz=1\naaa=2\n## Error\n\n');
+  assert.deepEqual(env.map(e => e.key), ['soc', 'bootargs', 'ipaddr', 'zzz', 'aaa']);
+  assert.equal(env[1].value, 'console=ttyS0,115200 mem=64M');
+  assert.deepEqual(groupEnv(env).map(g => [g.name, g.items.map(i => i.key)]),
+    [['Hardware', ['soc']], ['Network', ['ipaddr']], ['Boot', ['bootargs']], ['Other', ['aaa', 'zzz']]]);
+});
+
+test('mtdparts', () => {
+  assert.deepEqual(parseMtdparts('mtdparts=NOR_FLASH:256k(boot),64k(env),2048k(kernel),5120k(rootfs),-(rootfs_data)'), {
+    device: 'NOR_FLASH',
+    parts: [{ size: '256 KB', name: 'boot' }, { size: '64 KB', name: 'env' }, { size: '2048 KB', name: 'kernel' }, { size: '5120 KB', name: 'rootfs' }, { size: 'rest', name: 'rootfs_data' }],
+  });
+  assert.equal(parseMtdparts('garbage'), null);
+});

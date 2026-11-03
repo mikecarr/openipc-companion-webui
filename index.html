@@ -36,6 +36,18 @@
     <dl id="infoOut" class="infoOut" hidden></dl>
   </section>
 
+  <section class="card" id="envCard" hidden>
+    <div class="envHead">
+      <h2>Device details <span class="hint small">from fw_printenv</span></h2>
+      <div class="envTools">
+        <input id="envFilter" placeholder="Search keys or values" autocomplete="off">
+        <button id="envCopy" type="button" class="secondary">Copy all</button>
+        <button id="envRefresh" type="button" class="secondary">Refresh</button>
+      </div>
+    </div>
+    <div id="envGroups"></div>
+  </section>
+
   <section class="card">
     <h2><span class="n">2</span> Firmware</h2>
     <div class="grid">
