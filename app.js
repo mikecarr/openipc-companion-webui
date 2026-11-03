@@ -2,7 +2,7 @@ import { HelperClient, flashPercent } from './helper-client.js';
 import { validate, filterAssets, socFromFilename, scpCommand, flashCommand, sshUrl, tarNames, INFO_COMMAND, parseInfo } from './commands.js';
 
 const $ = id => document.getElementById(id);
-const state = { assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
+const state = { device: null, assets: [], filename: '', fromLocal: false, url: null, file: null, helper: null, connected: false, flashing: false };
 const releaseCache = new Map();
 
 function remember() {
@@ -35,9 +35,13 @@ async function loadReleases() {
 }
 
 function renderAssets(tag) {
-  const list = filterAssets(state.assets, { soc: $('soc').value.trim(), text: $('filter').value });
   const soc = $('soc').value.trim();
-  $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in release ${tag || 'latest'}` + (soc ? ` for ${soc}` : '') + '.';
+  const flash = state.device?.flash || '';
+  const list = filterAssets(state.assets, { soc, flash, text: $('filter').value });
+  if (state.filename && !state.fromLocal && !list.some(a => a.name === state.filename)) { state.filename = ''; state.url = null; update(); }
+  const scope = [soc, flash && `${flash.toUpperCase()} flash`].filter(Boolean).join(', ');
+  $('status').textContent = `${list.length} firmware file${list.length === 1 ? '' : 's'} in release ${tag || 'latest'}` +
+    (scope ? ` for ${scope}` : '') + (state.device ? ' (from the device)' : '') + '.';
   $('assets').replaceChildren(...list.map(a => {
     const li = document.createElement('li');
     const pick = document.createElement('button');
@@ -107,7 +111,7 @@ function applyInfo(text) {
   const info = parseInfo(text);
   if (!info) { $('infoHint').textContent = 'No OPENIPC-INFO line found. Copy the whole line the command printed and try again.'; return false; }
   if (info.soc) $('soc').value = info.soc;
-  if (info.flash && !$('filter').value.trim()) $('filter').value = info.flash;
+  state.device = info;
   const labels = { soc: 'SoC', sensor: 'Sensor', flash: 'Flash', host: 'Hostname', ver: 'Firmware' };
   $('infoOut').replaceChildren(...Object.entries(labels).filter(([k]) => info[k]).flatMap(([k, l]) => {
     const dt = document.createElement('dt'); dt.textContent = l;
@@ -115,7 +119,7 @@ function applyInfo(text) {
     return [dt, dd];
   }));
   $('infoOut').hidden = false; $('infoText').hidden = true;
-  $('infoHint').textContent = 'Device info loaded.';
+  $('infoHint').textContent = 'Device info loaded. The firmware list below now shows only files for this SoC and flash type.';
   renderAssets(releaseCache.get($('source').value)?.tag); update();
   return true;
 }
@@ -157,7 +161,9 @@ async function connectCamera() {
     await state.helper.connect({ host: ip, port, password: $('password').value });
     state.connected = true;
     $('connectBtn').textContent = 'Connected';
-    $('infoHint').textContent = `Connected to ${ip}.`;
+    $('infoHint').textContent = `Connected to ${ip}. Reading device info…`;
+    try { applyInfo((await state.helper.execText(INFO_COMMAND)).out); }
+    catch (e) { $('infoHint').textContent = `Connected, but could not read device info: ${e.message}`; }
   } catch (e) {
     state.connected = false;
     $('connectBtn').textContent = 'Connect';
@@ -246,7 +252,7 @@ $('connectBtn').addEventListener('click', () => connectCamera().catch(() => {}))
 $('flashBtn').addEventListener('click', flash);
 $('password').addEventListener('keydown', e => e.key === 'Enter' && connectCamera().catch(() => {}));
 ['ip', 'port', 'password'].forEach(id => $(id).addEventListener('input', () => {
-  if (state.connected && id !== 'password') { state.connected = false; $('connectBtn').textContent = 'Connect'; }
+  if (state.connected && id !== 'password') { state.connected = false; state.device = null; $('connectBtn').textContent = 'Connect'; }
 }));
 
 restore();

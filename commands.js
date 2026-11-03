@@ -24,11 +24,19 @@ export function socFromFilename(name) {
   return m ? m[1] : '';
 }
 
-export function filterAssets(assets, { soc = '', text = '' } = {}) {
+// Flash type from an asset name: ...-nor.tgz, ...-nand.tgz, openipc.ssc338q-nor-fpv.tgz. '' if not stated.
+export function flashFromFilename(name) {
+  const m = /[-_.](nand|nor)(?=[-_.])/i.exec(name);
+  return m ? m[1].toLowerCase() : '';
+}
+
+// soc and flash come from the device; files that don't name a flash type are kept.
+export function filterAssets(assets, { soc = '', flash = '', text = '' } = {}) {
   const words = text.toLowerCase().split(/[\s,]+/).filter(Boolean);
   return assets
     .filter(a => a.name.endsWith('.tgz'))
     .filter(a => !soc || socFromFilename(a.name) === soc.toLowerCase())
+    .filter(a => !flash || !flashFromFilename(a.name) || flashFromFilename(a.name) === flash)
     .filter(a => words.every(w => a.name.toLowerCase().includes(w)))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -88,7 +96,7 @@ export function tarNames(bytes) {
 // "OPENIPC-INFO key=value;..." line the page can parse back from the clipboard.
 export const INFO_COMMAND =
   `echo "OPENIPC-INFO soc=$(fw_printenv -n soc 2>/dev/null);sensor=$(fw_printenv -n sensor 2>/dev/null);` +
-  `flash=$(grep -o 'mtdparts=[^:]*' /proc/cmdline | cut -d= -f2);host=$(hostname -s);` +
+  `flash=$(cat /sys/class/mtd/mtd0/type 2>/dev/null || grep -o 'mtdparts=[^:]*' /proc/cmdline | cut -d= -f2);host=$(hostname -s);` +
   `ver=$(sed -n 's/^OPENIPC_VERSION=//p' /etc/os-release | tr -d '\\"')"`;
 
 export function parseInfo(text) {

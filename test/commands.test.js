@@ -65,3 +65,13 @@ test('flash progress lines', () => {
   assert.equal(flashPercent('\x1B[1mErasing block: 3/64 (4%)\x1B[0m'), 4);
   assert.equal(flashPercent('Update rootfs from /tmp/fw/rootfs'), null);
 });
+
+import { flashFromFilename } from '../commands.js';
+
+test('filter by device flash type', () => {
+  assert.equal(flashFromFilename('ssc338q_fpv_openipc-thinker-aio-nor.tgz'), 'nor');
+  assert.equal(flashFromFilename('openipc.ssc338q-nand-fpv.tgz'), 'nand');
+  assert.equal(flashFromFilename('ssc338q_rubyfpv.tgz'), '');
+  const a = ['ssc338q_fpv_a-b-nor.tgz', 'ssc338q_fpv_a-b-nand.tgz', 'ssc338q_rubyfpv.tgz', 'ssc30kq_fpv_a-b-nor.tgz'].map(name => ({ name }));
+  assert.deepEqual(filterAssets(a, { soc: 'ssc338q', flash: 'nor' }).map(x => x.name), ['ssc338q_fpv_a-b-nor.tgz', 'ssc338q_rubyfpv.tgz']);
+});
